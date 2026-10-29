@@ -1,0 +1,2 @@
+- thay đổi cơ chế provisioning, reset và in log
+- tất cả thao tác quan trọng như init, deinit, reconnect,... để phải được in ra dưới define PRINT_LOG. Troing define check điều kiện user có cho phép in lod hay k

@@ -1,0 +1,10 @@
+menu "Application logging"
+
+    config APP_LOG_DEFAULT_ENABLED
+        bool "Print application logs from boot"
+        default n
+        help
+            Initial state of the PRINT_LOG switch. At run time the user toggles it by
+            double-clicking the reset button; the choice is not persisted across reboots.
+
+endmenu

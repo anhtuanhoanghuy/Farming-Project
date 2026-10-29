@@ -1,0 +1,95 @@
+menu "App MQTT"
+
+    config APP_MQTT_BROKER_URI
+        string "Broker URI"
+        default "mqtt://103.98.150.157:1883"
+        help
+            Current deployment broker (plain MQTT, port 1883). Override with a private mqtts:// URI
+            and credentials for production.
+
+    config APP_MQTT_USERNAME
+        string "Broker username"
+        default ""
+
+    config APP_MQTT_PASSWORD
+        string "Broker password"
+        default ""
+
+    config APP_MQTT_NTP_SERVER
+        string "SNTP server"
+        default "pool.ntp.org"
+
+    config APP_MQTT_KEEPALIVE_S
+        int "MQTT keepalive (s)"
+        range 10 300
+        default 30
+
+    config APP_MQTT_ALLOW_PLAINTEXT
+        bool "Allow plain MQTT (development only)"
+        default n
+        help
+            Must be enabled to use mqtt://. Production should leave this disabled and use mqtts://.
+
+    config APP_MQTT_BACKOFF_BASE_MS
+        int "Reconnect backoff base (ms)"
+        range 100 10000
+        default 1000
+
+    config APP_MQTT_BACKOFF_MAX_MS
+        int "Reconnect backoff maximum (ms)"
+        range 1000 300000
+        default 60000
+
+    config APP_MQTT_BACKOFF_FLOOR_MS
+        int "Reconnect jitter floor (ms)"
+        range 0 2000
+        default 200
+
+    config APP_MQTT_BUFFER_SIZE
+        int "MQTT transport buffer (bytes)"
+        range 1024 8192
+        default 5120
+
+    config APP_MQTT_SNAPSHOT_PERIOD_S
+        int "Status snapshot period (s)"
+        range 10 3600
+        default 60
+
+    config APP_MQTT_FLUSH_GAP_MS
+        int "Telemetry flush gap (ms)"
+        range 50 1000
+        default 100
+
+    config APP_MQTT_CONNECT_TIMEOUT_MS
+        int "MQTT connect timeout (ms)"
+        range 1000 10000
+        default 4000
+
+    config APP_MQTT_TLS_TIME_WAIT_S
+        int "Maximum wait for SNTP before TLS retry (s)"
+        range 10 600
+        default 60
+
+    config APP_MQTT_RX_SLOTS
+        int "Static MQTT RX fragment slots"
+        range 2 8
+        default 4
+
+    config APP_MQTT_TELEMETRY_SLOTS
+        int "Static telemetry ring slots"
+        range 10 100
+        default 50
+
+    config APP_MQTT_MAX_RECONNECT_ATTEMPT
+        int "Maximum exponential-backoff exponent"
+        range 1 10
+        default 10
+
+    config APP_MQTT_OUTBOX_LIMIT
+        int "esp-mqtt outbox limit (bytes)"
+        range 1024 65536
+        default 8192
+        help
+            Upper bound for messages queued in the esp-mqtt outbox so a stalled link cannot grow the heap.
+
+endmenu

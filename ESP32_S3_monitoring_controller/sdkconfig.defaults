@@ -1,0 +1,46 @@
+CONFIG_IDF_TARGET="esp32s3"
+
+# Provisional flash size; confirm with the module variant.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# Native USB: console and flashing over USB-Serial/JTAG (GPIO19/20)
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# Task watchdog: 10 s, reset the chip on timeout
+CONFIG_ESP_TASK_WDT_EN=y
+CONFIG_ESP_TASK_WDT_INIT=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
+CONFIG_ESP_TASK_WDT_PANIC=y
+CONFIG_ESP_SYSTEM_PANIC_REBOOT=y
+
+CONFIG_ESP_BROWNOUT_DET=y
+
+# BLE provisioning uses NimBLE (the S3 has no classic BT)
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+
+# W5500 SPI Ethernet
+CONFIG_ETH_USE_SPI_ETHERNET=y
+CONFIG_ETH_SPI_ETHERNET_W5500=y
+
+# MQTT task on core 0 with the rest of the network stack; MQTT command parsing runs in sys_evt
+CONFIG_MQTT_TASK_CORE_SELECTION_ENABLED=y
+CONFIG_MQTT_USE_CORE_0=y
+CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=3584
+
+# Deployment broker (plain MQTT); override with a private mqtts:// broker for production.
+CONFIG_APP_MQTT_BROKER_URI="mqtt://103.98.150.157:1883"
+CONFIG_APP_MQTT_ALLOW_PLAINTEXT=y
+CONFIG_APP_MQTT_TELEMETRY_SLOTS=50
+CONFIG_APP_MQTT_MAX_RECONNECT_ATTEMPT=10
+# The retained snapshot can reach ~5 KB; keep room for the ACK and event messages queued with it.
+CONFIG_APP_MQTT_OUTBOX_LIMIT=16384
+
+# Application logs (network, MQTT, ...) from boot; otherwise they stay hidden until the user
+# double-clicks the button. Remove this line to go back to quiet logs.
+CONFIG_APP_LOG_DEFAULT_ENABLED=y
+
+# Keep the system wall clock current with one SNTP refresh per hour.
+CONFIG_LWIP_SNTP_UPDATE_DELAY=3600000

@@ -1,0 +1,9 @@
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+.vscode/
+build_esp32/
+sdkconfig.esp32
+sdkconfig.esp32.old
+
