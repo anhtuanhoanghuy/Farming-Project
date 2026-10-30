@@ -28,10 +28,10 @@
 
 /* Digital inputs DI1..DI4 (pulled up, active low: contact closed to GND reads true). PROVISIONAL
  * pins: not on the current schematic, confirm before wiring real inputs. */
-#define APP_PIN_DI_1        45
-#define APP_PIN_DI_2        46
-#define APP_PIN_DI_3        47
-#define APP_PIN_DI_4        48
+#define APP_PIN_DI_1        21
+#define APP_PIN_DI_2        47
+#define APP_PIN_DI_3        48
+#define APP_PIN_DI_4        45
 
 /* Status LEDs (active high through 330 R), pins taken from the schematic. IO36/IO37 are also the
  * octal PSRAM pins of the N8R8 module: do not enable PSRAM while these LEDs are fitted. The relay

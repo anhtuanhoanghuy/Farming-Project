@@ -50,7 +50,7 @@ class LoadController extends ChangeNotifier {
   /// state; the screen then shows the state as unknown.
   bool get stateKnown => _stateKnown;
 
-  String get title => '$_name';
+  String get title => _name;
 
   // ------------------------------------------------------------ delay timer
 
@@ -112,11 +112,15 @@ class LoadController extends ChangeNotifier {
   /// Takes everything the snapshot says about this load. While a request of
   /// the user is waiting to be sent or acknowledged the snapshot is ignored,
   /// so quick taps do not make the screen jump between two states.
-  void applySnapshot(LoadSnapshot snapshot, DateTime receivedAt) {
+  void applySnapshot(
+    LoadSnapshot snapshot,
+    DateTime receivedAt, {
+    bool acceptState = true,
+  }) {
     if (busy) return;
     rename(snapshot.name);
     setEnabled(snapshot.enabled);
-    setOn(snapshot.state);
+    if (acceptState) setOn(snapshot.state);
     applyDelay(snapshot.delay, receivedAt);
   }
 

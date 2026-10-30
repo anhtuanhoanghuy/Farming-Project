@@ -74,26 +74,30 @@ static void IRAM_ATTR di_button_isr(void *arg)
 static void di_button_task(void *arg)
 {
     (void)arg;
-    TickType_t last_press[APP_DI_COUNT] = {0};
-    bool have_last_press[APP_DI_COUNT] = {false};
+    bool armed[APP_DI_COUNT] = {true};
     const TickType_t debounce_ticks = pdMS_TO_TICKS(DI_BUTTON_DEBOUNCE_MS);
 
     for (;;) {
+        for (size_t i = 0; i < APP_DI_COUNT; i++) {
+            if (!armed[i] && gpio_get_level(s_di_pins[i]) != 0) {
+                armed[i] = true;
+            }
+        }
+
         di_button_event_t event;
-        if (xQueueReceive(s_di_button_queue, &event, portMAX_DELAY) != pdTRUE ||
+        if (xQueueReceive(s_di_button_queue, &event, pdMS_TO_TICKS(10U)) != pdTRUE ||
             event.di_index >= APP_DI_COUNT) {
             continue;
         }
-        if (have_last_press[event.di_index] &&
-            (TickType_t)(event.tick - last_press[event.di_index]) < debounce_ticks) {
+        if (!armed[event.di_index]) {
             continue;
         }
 
         vTaskDelay(debounce_ticks);
         if (gpio_get_level(s_di_pins[event.di_index]) != 0) continue;
 
-        have_last_press[event.di_index] = true;
-        last_press[event.di_index] = event.tick;
+        /* Stay disarmed until release so one physical press cannot issue multiple commands. */
+        armed[event.di_index] = false;
         const ctl_result_t result = app_control_process_button_di(event.di_index);
         if (result != CTL_OK && result != CTL_ERR_NOT_FOUND) {
             ESP_LOGW(TAG, "DI%u button command failed: %s", (unsigned)(event.di_index + 1U),

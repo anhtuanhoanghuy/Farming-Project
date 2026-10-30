@@ -662,21 +662,64 @@ class _LoadsTab extends StatelessWidget {
   final DeviceSelection device;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _DeviceAlerts(),
-        Text(
-          'Tải hiện tại · ${LoadController.loads.length} tải',
-          style: AppTextStyles.sectionTitle,
-        ),
-        const SizedBox(height: 12),
-        for (final load in LoadController.loads) ...[
-          _LoadCard(load: load, device: device),
-          if (load != LoadController.loads.last) const SizedBox(height: 12),
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Listenable.merge(LoadController.loads),
+    builder: (context, _) {
+      final enabledLoads = [
+        for (final load in LoadController.loads)
+          if (load.enabled) load,
+      ];
+      final disabledLoads = [
+        for (final load in LoadController.loads)
+          if (!load.enabled) load,
+      ];
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _DeviceAlerts(),
+          Text(
+            'Tải hiện tại · ${LoadController.loads.length} tải',
+            style: AppTextStyles.sectionTitle,
+          ),
+          const SizedBox(height: 12),
+          for (var i = 0; i < enabledLoads.length; i++) ...[
+            _LoadCard(load: enabledLoads[i], device: device),
+            if (i < enabledLoads.length - 1) const SizedBox(height: 12),
+          ],
+          if (disabledLoads.isNotEmpty) ...[
+            if (enabledLoads.isNotEmpty) const SizedBox(height: 12),
+            _DisabledLoadsDropdown(loads: disabledLoads, device: device),
+          ],
         ],
-      ],
+      );
+    },
+  );
+}
+
+class _DisabledLoadsDropdown extends StatelessWidget {
+  const _DisabledLoadsDropdown({required this.loads, required this.device});
+
+  final List<LoadController> loads;
+  final DeviceSelection device;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: ExpansionTile(
+        title: const Text('Tải bị vô hiệu hóa', style: AppTextStyles.cardTitle),
+        subtitle: Text('${loads.length} tải'),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        children: [
+          for (var i = 0; i < loads.length; i++) ...[
+            _LoadCard(load: loads[i], device: device),
+            if (i < loads.length - 1) const SizedBox(height: 12),
+          ],
+        ],
+      ),
     );
   }
 }

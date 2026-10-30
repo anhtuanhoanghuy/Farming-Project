@@ -13,6 +13,13 @@ import '../state/device_state.dart';
 import '../state/load_controller.dart';
 import 'mqtt_session_manager.dart';
 
+class _RecentLoadEvent {
+  const _RecentLoadEvent(this.state, this.receivedAt);
+
+  final bool state;
+  final DateTime receivedAt;
+}
+
 /// Keeps [DeviceState] and the [LoadController]s equal to what the ESP32 of
 /// the open device reports.
 ///
@@ -56,11 +63,13 @@ class LoadSync {
   final MqttDeviceMessage? Function(String) _latestSnapshot;
   final List<LoadController> _loads;
   final Duration statusRetryDelay;
+  static const _stateOrderingWindow = Duration(seconds: 2);
 
   String? _deviceId;
   StreamSubscription<MqttDeviceMessage>? _subscription;
   bool _wasConnected = false;
   bool? _lastOnline;
+  final _recentLoadEvents = <String, _RecentLoadEvent>{};
 
   String? get deviceId => _deviceId;
 
@@ -74,6 +83,7 @@ class LoadSync {
       load.markUnknown();
     }
     _deviceId = deviceId;
+    _recentLoadEvents.clear();
     _state.reset(deviceId);
     _lastOnline = _presence.isOnline(deviceId);
     LoadController.onDelayElapsed = _onElapsed;
@@ -98,6 +108,7 @@ class LoadSync {
       LoadController.onDelayElapsed = null;
     }
     _deviceId = null;
+    _recentLoadEvents.clear();
   }
 
   Future<void> requestStatus() async {
@@ -205,7 +216,7 @@ class LoadSync {
       case 'SNAPSHOT':
         _applySnapshot(decoded, message.receivedAt);
       case 'EVENT':
-        _applyEvent(decoded);
+        _applyEvent(decoded, message.receivedAt);
     }
   }
 
@@ -219,7 +230,9 @@ class LoadSync {
       final value = input.values.firstOrNull?.value;
       if (loadId == null || !input.valid || value is! bool) continue;
       final load = _loads.where((item) => item.portId == loadId).firstOrNull;
-      load?.setOnFromDevice(value);
+      if (load != null && _acceptDeviceState(loadId, value, at)) {
+        load.setOnFromDevice(value);
+      }
     }
   }
 
@@ -231,16 +244,38 @@ class LoadSync {
     if (snapshot == null) return;
     _state.applySnapshot(snapshot);
     for (final item in snapshot.loads) {
-      _controller(item.loadId)?.applySnapshot(item, receivedAt);
+      final load = _controller(item.loadId);
+      if (load == null) continue;
+      load.applySnapshot(
+        item,
+        receivedAt,
+        acceptState: _acceptDeviceState(item.loadId, item.state, receivedAt),
+      );
     }
   }
 
-  void _applyEvent(Map<dynamic, dynamic> event) {
+  bool _acceptDeviceState(String loadId, bool state, DateTime receivedAt) {
+    final recent = _recentLoadEvents[loadId];
+    if (recent == null) return true;
+    if (state == recent.state) {
+      _recentLoadEvents.remove(loadId);
+      return true;
+    }
+    if (receivedAt.difference(recent.receivedAt) < _stateOrderingWindow) {
+      return false;
+    }
+    _recentLoadEvents.remove(loadId);
+    return true;
+  }
+
+  void _applyEvent(Map<dynamic, dynamic> event, DateTime receivedAt) {
     switch (event['event']) {
       case 'LOAD_CHANGED':
         final state = event['state'];
-        if (state is bool) {
-          _controller(event['load_id'])?.setOnFromDevice(state);
+        final loadId = event['load_id'];
+        if (state is bool && loadId is String) {
+          _recentLoadEvents[loadId] = _RecentLoadEvent(state, receivedAt);
+          _controller(loadId)?.setOnFromDevice(state);
         }
       case 'EMERGENCY_STOP':
         for (final load in _loads) {
