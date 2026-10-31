@@ -777,6 +777,7 @@ int mqtt_proto_serialize_event(const mqtt_event_t *e, const char *boot_id, bool 
     static const char *const names[] = {
         "LOAD_CHANGED", "INTERLOCK_TRIPPED", "INTERLOCK_CLEARED", "ERRORS_CHANGED",
         "NET_SWITCHED", "LOW_HEAP", "TIME_SYNCED", "REBOOT", "EMERGENCY_STOP",
+        "DIAGNOSTIC",
     };
     if (e == NULL || (unsigned)e->kind >= sizeof(names) / sizeof(names[0])) return -1;
     cJSON *o = new_base();
@@ -815,6 +816,22 @@ int mqtt_proto_serialize_event(const mqtt_event_t *e, const char *boot_id, bool 
     case MQTT_EVENT_EMERGENCY_STOP:
         cJSON_AddStringToObject(o, "source", e->source);
         cJSON_AddNumberToObject(o, "loads_off", e->loads_off);
+        break;
+    case MQTT_EVENT_DIAGNOSTIC:
+        cJSON_AddNumberToObject(o, "boot_count", e->boot_count);
+        cJSON_AddStringToObject(o, "reset_reason", e->reason);
+        cJSON_AddNumberToObject(o, "reset_reason_code", e->reset_reason);
+        cJSON_AddNumberToObject(o, "error_mask", e->error_mask);
+        cJSON *diagnostic_errors = cJSON_AddObjectToObject(o, "errors");
+        cJSON_AddNumberToObject(diagnostic_errors, "code_mask", e->error_mask);
+        add_error_names(cJSON_AddArrayToObject(diagnostic_errors, "messages"), e->error_mask);
+        cJSON_AddNumberToObject(o, "mqtt_state", e->mqtt_state);
+        cJSON_AddNumberToObject(o, "network_state", e->network_state);
+        cJSON_AddBoolToObject(o, "interlock_tripped", e->diagnostic_interlock);
+        cJSON_AddBoolToObject(o, "emergency_active", e->diagnostic_emergency);
+        cJSON_AddNumberToObject(o, "uptime_ms", e->diagnostic_uptime_ms);
+        cJSON_AddNumberToObject(o, "free_heap", e->free_heap);
+        cJSON_AddNumberToObject(o, "min_free_heap", e->min_free_heap);
         break;
     default:
         break;

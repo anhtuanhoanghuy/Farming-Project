@@ -327,6 +327,23 @@ void app_main(void)
                  esp_err_to_name(nvm_result));
         app_sysmon_error_mask_update((uint32_t)SYS_ERR_NVM_FAIL, 0U);
     }
+    if (nvm_result == ESP_OK) {
+        app_diagnostic_record_t diagnostics;
+        esp_err_t diagnostics_result = app_nvm_load_diagnostics(&diagnostics);
+        if (diagnostics_result != ESP_OK && diagnostics_result != ESP_ERR_NVS_NOT_FOUND) {
+            ESP_LOGW(TAG, "Diagnostic history load failed: %s",
+                     esp_err_to_name(diagnostics_result));
+            memset(&diagnostics, 0, sizeof(diagnostics));
+        }
+        diagnostics.boot_count++;
+        diagnostics.reset_reason = (uint32_t)esp_reset_reason();
+        diagnostics.uptime_ms = 0U;
+        diagnostics_result = app_nvm_save_diagnostics(&diagnostics);
+        if (diagnostics_result != ESP_OK) {
+            ESP_LOGW(TAG, "Diagnostic history boot record failed: %s",
+                     esp_err_to_name(diagnostics_result));
+        }
+    }
 
     esp_err_t config_load_result = app_nvm_load_config(&s_config);
     if (config_load_result != ESP_OK && config_load_result != ESP_ERR_NVS_NOT_FOUND) {

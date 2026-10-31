@@ -748,5 +748,6 @@ Quy tắc:
 | `low_heap` | Free heap < 20 KB (hysteresis: xóa khi > 24 KB), tối đa 1/60 s | `free`, `min_free` |
 | `time_synced` | `BIT_TIME_VALID` 0→1 | — |
 | `reboot` | Sau boot, ngay khi ONLINE | `reason` (từ `esp_reset_reason()`: `power`,`wdt`,`brownout`,`panic`,`sw`) |
+| `DIAGNOSTIC` | Event ngay sau khi MQTT ONLINE; đọc từ checkpoint NVS của lần boot/runtime trước | `boot_count`, `reset_reason`, `reset_reason_code`, `error_mask`, `errors.code_mask`, `errors.messages[]`, `mqtt_state`, `network_state`, `interlock_tripped`, `emergency_active`, `uptime_ms`, `free_heap`, `min_free_heap` |
 
 Lý do cần `load_changed`: tải có thể đổi không do lệnh của app (hết timer, interlock, nút bấm) — app khác dùng cùng `user_id` phải đồng bộ được.

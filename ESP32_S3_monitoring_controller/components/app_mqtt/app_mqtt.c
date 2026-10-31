@@ -20,6 +20,7 @@
 #include "esp_system.h"
 #include "esp_task_wdt.h"
 #include "esp_timer.h"
+#include "nvs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
@@ -151,6 +152,9 @@ static uint32_t s_backoff_attempt;
 static uint32_t s_safety_timeout_s;
 static uint32_t s_telemetry_interval_s = APP_NVM_DEFAULT_TELEMETRY_INTERVAL_S;
 static uint32_t s_seen_error_mask;
+static app_diagnostic_record_t s_diagnostics;
+static bool s_diagnostics_loaded;
+static int64_t s_diagnostics_due_us;
 static uint32_t s_pending_sub_msg;
 static uint8_t s_suback_mask;
 static int64_t s_state_since_us;
@@ -181,6 +185,7 @@ static void network_event_cb(app_network_event_t event, net_interface_t from, ne
                              void *ctx);
                              
 static void publish_latest_sample(void);
+static void save_diagnostic_checkpoint(void);
 
 static uint32_t increment(uint32_t *value)
 {
@@ -497,11 +502,60 @@ static void publish_event_value(const mqtt_event_t *src)
         src->kind == MQTT_EVENT_INTERLOCK_TRIPPED || src->kind == MQTT_EVENT_INTERLOCK_CLEARED) {
         __atomic_store_n(&s_snapshot_dirty, 1, __ATOMIC_RELAXED);
     }
+    if (src->kind == MQTT_EVENT_INTERLOCK_TRIPPED ||
+        src->kind == MQTT_EVENT_INTERLOCK_CLEARED ||
+        src->kind == MQTT_EVENT_ERRORS_CHANGED ||
+        src->kind == MQTT_EVENT_EMERGENCY_STOP) {
+        save_diagnostic_checkpoint();
+    }
     if (s_state != MQTT_STATE_ONLINE) return;
     int n = mqtt_proto_serialize_event(src, s_boot_id, time_valid(), current_epoch_ms(),
                                        s_event_payload, sizeof(s_event_payload));
     if (n <= 0) increment(&s_stats.tx_fail);
     else publish_status(s_event_payload, n, false);
+}
+
+static void save_diagnostic_checkpoint(void)
+{
+    if (!s_diagnostics_loaded) return;
+    s_diagnostics.error_mask = __atomic_load_n(&g_sys.sys_error_mask, __ATOMIC_RELAXED);
+    s_diagnostics.mqtt_state = (uint32_t)s_state;
+    s_diagnostics.network_state = (uint32_t)app_network_get_state();
+    s_diagnostics.interlock = app_mqtt_safety_interlock_tripped() ? 1U : 0U;
+    s_diagnostics.emergency = app_control_is_estop() ? 1U : 0U;
+    s_diagnostics.free_heap = esp_get_free_heap_size();
+    s_diagnostics.min_free_heap = esp_get_minimum_free_heap_size();
+    s_diagnostics.uptime_ms = (uint32_t)(esp_timer_get_time() / 1000LL);
+    s_diagnostics_due_us = esp_timer_get_time() + 60000000LL;
+    esp_err_t result = app_nvm_save_diagnostics(&s_diagnostics);
+    if (result != ESP_OK) {
+        ESP_LOGW(TAG, "Diagnostic checkpoint save failed: %s", esp_err_to_name(result));
+    }
+}
+
+static void publish_diagnostic_record(void)
+{
+    mqtt_event_t event = {
+        .kind = MQTT_EVENT_DIAGNOSTIC,
+        .boot_count = s_diagnostics.boot_count,
+        .reset_reason = s_diagnostics.reset_reason,
+        .error_mask = s_diagnostics.error_mask,
+        .mqtt_state = s_diagnostics.mqtt_state,
+        .network_state = s_diagnostics.network_state,
+        .diagnostic_interlock = s_diagnostics.interlock != 0U,
+        .diagnostic_emergency = s_diagnostics.emergency != 0U,
+        .diagnostic_uptime_ms = s_diagnostics.uptime_ms,
+        .free_heap = s_diagnostics.free_heap,
+        .min_free_heap = s_diagnostics.min_free_heap,
+    };
+    const esp_reset_reason_t reset = (esp_reset_reason_t)s_diagnostics.reset_reason;
+    const char *reason = reset == ESP_RST_POWERON ? "power" :
+                         (reset == ESP_RST_TASK_WDT || reset == ESP_RST_INT_WDT ||
+                          reset == ESP_RST_WDT) ? "wdt" :
+                         reset == ESP_RST_BROWNOUT ? "brownout" :
+                         reset == ESP_RST_PANIC ? "panic" : "sw";
+    strlcpy(event.reason, reason, sizeof(event.reason));
+    publish_event_value(&event);
 }
 
 static void publish_online_state(void)
@@ -515,6 +569,7 @@ static void publish_online_state(void)
                          reset == ESP_RST_BROWNOUT ? "brownout" : reset == ESP_RST_PANIC ? "panic" : "sw";
     strlcpy(reboot.reason, reason, sizeof(reboot.reason));
     publish_event_value(&reboot);
+    publish_diagnostic_record();
     if (s_pending_net_event) {
         mqtt_event_t switched = {.kind = MQTT_EVENT_NET_SWITCHED};
         strlcpy(switched.from, s_pending_net_from, sizeof(switched.from));
@@ -784,6 +839,7 @@ static void process_signal(const mqtt_signal_t *sig)
             if (xTimerIsTimerActive(s_safety_timer) == pdFALSE)
                 (void)xTimerChangePeriod(s_safety_timer, pdMS_TO_TICKS(s_safety_timeout_s * 1000U), 0);
         }
+        save_diagnostic_checkpoint();
         break;
     case SIGNAL_ERROR:
         ESP_LOGW(TAG, "MQTT error type=%d connect_return_code=%d tls_err=0x%x",
@@ -849,6 +905,7 @@ static void handle_control(const ctrl_request_t *req)
         set_broker_error(false);
         if (!app_mqtt_safety_interlock_tripped())
             (void)xTimerChangePeriod(s_safety_timer, pdMS_TO_TICKS(s_safety_timeout_s * 1000U), 0);
+        save_diagnostic_checkpoint();
         break;
     case CTRL_SHUTDOWN:
         s_enabled = 0; s_shutdown = 1; stop_client(true, "factory_reset"); (void)xTimerStop(s_safety_timer, 0); break;
@@ -1020,6 +1077,9 @@ static void mqtt_worker(void *arg)
             force_outputs_safe();
         }
         check_periodic();
+        if (s_diagnostics_loaded && esp_timer_get_time() >= s_diagnostics_due_us) {
+            save_diagnostic_checkpoint();
+        }
         (void)esp_task_wdt_reset();
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(50));
     }
@@ -1035,6 +1095,17 @@ esp_err_t app_mqtt_init(const app_config_t *config)
         return ESP_ERR_INVALID_ARG;
     if (!mqtt_proto_valid_user_id(config->user_id) || CONFIG_APP_MQTT_BROKER_URI[0] == '\0')
         return ESP_ERR_INVALID_ARG;
+    esp_err_t diagnostics_result = app_nvm_load_diagnostics(&s_diagnostics);
+    if (diagnostics_result == ESP_OK) {
+        s_diagnostics_loaded = true;
+    } else if (diagnostics_result == ESP_ERR_NVS_NOT_FOUND) {
+        memset(&s_diagnostics, 0, sizeof(s_diagnostics));
+        s_diagnostics_loaded = true;
+    } else {
+        ESP_LOGW(TAG, "Diagnostic history unavailable: %s",
+                 esp_err_to_name(diagnostics_result));
+    }
+    s_diagnostics_due_us = esp_timer_get_time() + 60000000LL;
     s_tls_mode = strncmp(CONFIG_APP_MQTT_BROKER_URI, "mqtts://", 8U) == 0;
     if (!s_tls_mode && !APP_MQTT_PLAINTEXT_ALLOWED) {
         ESP_LOGE(TAG, "plain MQTT disabled by build policy"); return ESP_ERR_NOT_SUPPORTED;

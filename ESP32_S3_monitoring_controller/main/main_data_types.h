@@ -291,7 +291,8 @@ typedef enum {
     MQTT_EVENT_LOW_HEAP,
     MQTT_EVENT_TIME_SYNCED,
     MQTT_EVENT_REBOOT,
-    MQTT_EVENT_EMERGENCY_STOP
+    MQTT_EVENT_EMERGENCY_STOP,
+    MQTT_EVENT_DIAGNOSTIC
 } mqtt_event_kind_t;
 
 typedef struct {
@@ -308,6 +309,14 @@ typedef struct {
     uint8_t loads_off;
     uint32_t free_heap;
     uint32_t min_free_heap;
+    uint32_t boot_count;
+    uint32_t reset_reason;
+    uint32_t mqtt_state;
+    uint32_t network_state;
+    uint32_t error_mask;
+    uint32_t diagnostic_uptime_ms;
+    bool diagnostic_interlock;
+    bool diagnostic_emergency;
     char reason[16];
 } mqtt_event_t;
 

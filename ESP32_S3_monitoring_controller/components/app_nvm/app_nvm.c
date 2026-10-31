@@ -15,8 +15,10 @@
 #define APP_NVM_NAMESPACE "app_cfg"
 #define APP_NVM_CONFIG_KEY "config"
 #define APP_NVM_DEVCFG_KEY "devcfg"
+#define APP_NVM_DIAGNOSTICS_KEY "diagnostics"
 #define APP_NVM_RECORD_MAGIC 0x41504346U
 #define APP_NVM_MAX_RECORD_SIZE 2048U
+#define APP_NVM_DIAGNOSTICS_SCHEMA_VERSION 1U
 
 static const char *TAG = "app_nvm";
 
@@ -673,6 +675,40 @@ esp_err_t app_nvm_load_device_cfg(device_cfg_t *cfg)
         app_nvm_set_default_device_cfg(cfg);
     }
     return result;
+}
+
+esp_err_t app_nvm_save_diagnostics(const app_diagnostic_record_t *record)
+{
+    if (record == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    return write_record(APP_NVM_DIAGNOSTICS_KEY, APP_NVM_DIAGNOSTICS_SCHEMA_VERSION,
+                        record, sizeof(*record));
+}
+
+esp_err_t app_nvm_load_diagnostics(app_diagnostic_record_t *record)
+{
+    if (record == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    memset(record, 0, sizeof(*record));
+
+    uint8_t *raw_record = NULL;
+    const uint8_t *payload = NULL;
+    uint16_t schema = 0;
+    size_t size = 0;
+    esp_err_t result = read_record(APP_NVM_DIAGNOSTICS_KEY, &raw_record, &payload, &schema, &size);
+    if (result != ESP_OK) {
+        return result;
+    }
+    if (schema != APP_NVM_DIAGNOSTICS_SCHEMA_VERSION || size != sizeof(*record)) {
+        free(raw_record);
+        return schema != APP_NVM_DIAGNOSTICS_SCHEMA_VERSION ? ESP_ERR_NOT_SUPPORTED
+                                                             : ESP_ERR_INVALID_SIZE;
+    }
+    memcpy(record, payload, sizeof(*record));
+    free(raw_record);
+    return ESP_OK;
 }
 
 esp_err_t app_nvm_factory_reset(void)
