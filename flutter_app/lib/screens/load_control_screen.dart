@@ -185,6 +185,7 @@ class _LoadControlScreenState extends State<LoadControlScreen> {
   /// Delay mode: true = wait then turn on, false = wait then turn off.
   bool _turnOnFirst = true;
   bool _delayFormLoaded = false;
+  bool? _delayStateOn;
 
   /// Commands sent from this screen that wait for their ACK.
   int _pending = 0;
@@ -208,11 +209,13 @@ class _LoadControlScreenState extends State<LoadControlScreen> {
     _delay.addListener(_refresh);
     _duration.addListener(_refresh);
     _syncFromSnapshot(force: true);
+    _load.addListener(_onLoadChanged);
   }
 
   @override
   void dispose() {
     DeviceState.instance.removeListener(_onDeviceStateChanged);
+    _load.removeListener(_onLoadChanged);
     for (final draft in _conditions.values) {
       _retired.add(draft.threshold);
     }
@@ -229,6 +232,15 @@ class _LoadControlScreenState extends State<LoadControlScreen> {
   }
 
   // ------------------------------------------------------------------ data
+
+  void _onLoadChanged() {
+    if (!mounted || _load.delayActive || !_load.stateKnown) return;
+    if (_delayStateOn == _load.isOn) return;
+    setState(() {
+      _delayStateOn = _load.isOn;
+      _turnOnFirst = !_load.isOn;
+    });
+  }
 
   void _onDeviceStateChanged() {
     if (!mounted) return;
@@ -296,9 +308,13 @@ class _LoadControlScreenState extends State<LoadControlScreen> {
 
     if (load != null && !_delayFormLoaded) {
       _delayFormLoaded = true;
+      _delayStateOn = load.state;
+      _turnOnFirst = !load.state;
       if (load.delay.delayMin > 0 || load.delay.duration > 0) {
         _delay.text = '${load.delay.delayMin}';
         _duration.text = '${load.delay.duration}';
+      }
+      if (load.delay.isRunning) {
         _turnOnFirst = !load.delay.offThenOn;
       }
     }

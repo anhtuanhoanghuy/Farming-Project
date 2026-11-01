@@ -222,6 +222,14 @@ Chuỗi UUID trên App là thứ tự byte đảo ngược của mảng này.
 - **REQ-088** Khi hẹn giờ trễ đang chạy, điều kiện và lịch không điều khiển tải. Điều kiện cảm biến được xét trên mẫu mới và ưu tiên hơn lịch. Nếu điều kiện đang tác động đúng phút lịch, sự kiện lịch có thể bị bỏ qua và không chạy bù.
 - **REQ-089** Lệnh điều khiển thủ công có thể tắt điều kiện và lịch đang bật của tải; UI phải đồng bộ lại từ trạng thái thiết bị sau ACK.
 
+### Hiển thị cài đặt trễ và hướng màn hình
+
+- App chỉ sử dụng màn hình dọc (portrait upright) trên Android và iOS, kể cả iPad; không xoay ngang hoặc lật ngược.
+- Khi tải đang bật và không có hẹn giờ đang chạy, mặc định hiển thị “Thời gian tắt”, “Thời gian bật kể từ khi tắt” và nút “Đổi sang bật”.
+- Khi tải đang tắt và không có hẹn giờ đang chạy, mặc định hiển thị “Thời gian bật”, “Thời gian tắt kể từ khi bật” và nút “Đổi sang tắt”.
+- Nút đổi chế độ vẫn hoạt động như trước và giữ số phút đã nhập. Chế độ người dùng chọn không bị ghi đè bởi snapshot có cùng trạng thái tải; khi trạng thái tải thay đổi, mặc định được cập nhật theo trạng thái mới.
+- Hẹn giờ đang chạy giữ chế độ đã gửi và khóa nút đổi chế độ; không đảo chế độ giữa hai pha.
+
 ## 14. Configuration Rules
 
 - **REQ-090** `wifi_ssid` ≤ 32, `wifi_password` ≤ 64 (buffer); mật khẩu Wi-Fi nhập trên App: 8–63 ký tự ASCII in được (chuẩn WPA2-PSK).
