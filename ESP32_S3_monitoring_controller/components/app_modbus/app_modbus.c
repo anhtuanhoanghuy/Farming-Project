@@ -42,7 +42,7 @@
 
 static const char *TAG = "app_modbus";
 
-static const gpio_num_t s_di_pins[APP_DI_COUNT] = {
+static const gpio_num_t s_di_pins[APP_DI_SLOT_COUNT] = {
     APP_PIN_DI_1, APP_PIN_DI_2, APP_PIN_DI_3, APP_PIN_DI_4,
 };
 
@@ -74,7 +74,7 @@ static void IRAM_ATTR di_button_isr(void *arg)
 static void di_button_task(void *arg)
 {
     (void)arg;
-    bool armed[APP_DI_COUNT] = {true};
+    bool armed[APP_DI_SLOT_COUNT] = {true};
     const TickType_t debounce_ticks = pdMS_TO_TICKS(DI_BUTTON_DEBOUNCE_MS);
 
     for (;;) {
@@ -533,7 +533,7 @@ static void sensor_acquisition_task(void *arg)
         esp_restart();
     }
 
-    slot_health_t health[APP_RS485_INTERFACE_COUNT] = {0};
+    slot_health_t health[APP_RS485_SLOT_COUNT] = {0};
     uint32_t seen_generation = 0U;
     bool seen_generation_valid = false;
     static device_cfg_t device;
@@ -662,12 +662,12 @@ esp_err_t app_modbus_init(void)
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE,
     };
-    esp_err_t di_err = gpio_config(&di_config);
-    if (di_err == ESP_OK) {
+    esp_err_t di_err = APP_DI_COUNT > 0 ? gpio_config(&di_config) : ESP_OK;
+    if (APP_DI_COUNT > 0 && di_err == ESP_OK) {
         di_err = gpio_install_isr_service(0);
         if (di_err == ESP_ERR_INVALID_STATE) di_err = ESP_OK;
     }
-    if (di_err == ESP_OK) {
+    if (APP_DI_COUNT > 0 && di_err == ESP_OK) {
         s_di_button_queue = xQueueCreate(DI_BUTTON_QUEUE_LENGTH, sizeof(di_button_event_t));
         if (s_di_button_queue == NULL) di_err = ESP_ERR_NO_MEM;
     }
@@ -693,16 +693,16 @@ esp_err_t app_modbus_init(void)
             s_di_button_queue = NULL;
         }
     }
-    s_di_button_isr_ready = di_err == ESP_OK;
+    s_di_button_isr_ready = APP_DI_COUNT > 0 && di_err == ESP_OK;
     if (di_err != ESP_OK) {
         ESP_LOGE(TAG, "Digital input/interrupt setup failed: %s", esp_err_to_name(di_err));
     }
 
-    esp_err_t err = uart_initialize();
+    esp_err_t err = APP_RS485_INTERFACE_COUNT > 0 ? uart_initialize() : ESP_OK;
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "UART1 RS485 initialization failed: %s (RS485 sensors report errors)",
                  esp_err_to_name(err));
-    } else {
+    } else if (APP_RS485_INTERFACE_COUNT > 0) {
         ESP_LOGI(TAG, "UART1 RS485 ready at %d baud, 8N1, DE/RE=GPIO%d",
                  MODBUS_BAUD_RATE, APP_PIN_RS485_DE_RE);
     }

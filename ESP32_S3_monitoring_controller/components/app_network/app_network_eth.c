@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "driver/gpio.h"
+#include "defines.h"
 #include "esp_eth.h"
 #include "esp_event.h"
 #include "esp_mac.h"
@@ -384,6 +385,10 @@ static esp_err_t recover_hardware(void)
 
 esp_err_t app_eth_w5500_init(void)
 {
+    if (!NETWORK_INTERFACE_ETHERNET) {
+        ESP_LOGE(TAG, "Ethernet is not supported by this device");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
     if (s_initialized) {
         return ESP_OK;
     }

@@ -340,19 +340,22 @@ class MqttSessionManager extends ChangeNotifier {
     } on FormatException {
       return;
     }
+    var snapshotChanged = false;
     if (decoded is Map) {
       if (message.kind == MqttDeviceTopicKind.status) {
         switch (decoded['type']) {
           case 'SNAPSHOT':
             _latestSnapshots[message.deviceId] = message;
+            snapshotChanged = true;
           case 'LWT':
-            _latestSnapshots.remove(message.deviceId);
+            snapshotChanged = _latestSnapshots.remove(message.deviceId) != null;
         }
       } else if (message.kind == MqttDeviceTopicKind.ack) {
         _completeAck(decoded);
       }
     }
     _messages.add(message);
+    if (snapshotChanged) notifyListeners();
   }
 
   void _completeAck(Map<dynamic, dynamic> json) {

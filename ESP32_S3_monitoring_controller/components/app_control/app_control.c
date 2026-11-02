@@ -26,7 +26,7 @@ static const char *TAG = "app_control";
 static const gpio_num_t s_relay_pins[APP_LOAD_COUNT] = {
     APP_PIN_RELAY_1, APP_PIN_RELAY_2, APP_PIN_RELAY_3, APP_PIN_RELAY_4,
 };
-static const gpio_num_t s_di_pins[APP_DI_COUNT] = {
+static const gpio_num_t s_di_pins[APP_DI_SLOT_COUNT] = {
     APP_PIN_DI_1, APP_PIN_DI_2, APP_PIN_DI_3, APP_PIN_DI_4,
 };
 
@@ -108,6 +108,13 @@ static uint32_t remaining_seconds(int64_t deadline_us, int64_t now_us)
 static int set_output_locked(uint8_t index, bool on, const char *source, bool publish_event)
 {
     load_state_t *load = &s_load[index];
+    if (!app_load_supported(index)) {
+        if (on) {
+            ESP_LOGE(TAG, "DO%u is not supported", (unsigned)(index + 1U));
+            return -1;
+        }
+        return 0;
+    }
     if (load->output == on) return 0;
     if (on && s_interlock) {
         ESP_LOGW(TAG, "DO%u ON refused (%s): safety interlock active", (unsigned)(index + 1U), source);
@@ -328,13 +335,14 @@ static void app_control_task(void *arg)
 static esp_err_t configure_relays_safe(void)
 {
     uint64_t pin_mask = 0;
-    for (size_t i = 0; i < APP_LOAD_COUNT; i++) pin_mask |= 1ULL << s_relay_pins[i];
+    for (size_t i = 0; i < APP_DO_COUNT; i++) pin_mask |= 1ULL << s_relay_pins[i];
+    if (pin_mask == 0U) return ESP_OK;
     gpio_config_t config = {.pin_bit_mask = pin_mask, .mode = GPIO_MODE_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE, .pull_down_en = GPIO_PULLDOWN_ENABLE,
         .intr_type = GPIO_INTR_DISABLE};
     esp_err_t err = gpio_config(&config);
     if (err != ESP_OK) return err;
-    for (size_t i = 0; i < APP_LOAD_COUNT; i++) {
+    for (size_t i = 0; i < APP_DO_COUNT; i++) {
         err = gpio_set_level(s_relay_pins[i], 0);
         if (err != ESP_OK) return err;
     }
@@ -361,7 +369,8 @@ esp_err_t app_control_init(void)
         return ESP_ERR_NO_MEM;
     }
     s_initialized = true;
-    ESP_LOGI(TAG, "Load engine ready: 4 relays off, tick %u ms", (unsigned)CONTROL_TICK_MS);
+    ESP_LOGI(TAG, "Load engine ready: %u relays off, tick %u ms",
+             (unsigned)APP_DO_COUNT, (unsigned)CONTROL_TICK_MS);
     return ESP_OK;
 }
 
@@ -381,7 +390,7 @@ esp_err_t app_control_sensor_update(const sensor_cycle_t *cycle)
 
 static ctl_result_t set_state_internal(uint8_t index, bool on, bool publish_event)
 {
-    if (index >= APP_LOAD_COUNT) return CTL_ERR_ARG;
+    if (!app_load_supported(index)) return CTL_ERR_ARG;
     if (!s_initialized) return CTL_ERR_INTERNAL;
 
     xSemaphoreTake(s_lock, portMAX_DELAY);
@@ -481,7 +490,7 @@ static uint8_t feedback_di_for_load(const device_cfg_t *cfg, uint8_t load_index)
 
 esp_err_t app_control_get_feedback(uint8_t load_index, bool *state)
 {
-    if (load_index >= APP_LOAD_COUNT || state == NULL) return ESP_ERR_INVALID_ARG;
+    if (!app_load_supported(load_index) || state == NULL) return ESP_ERR_INVALID_ARG;
     device_cfg_t cfg;
     app_device_get(&cfg);
     const uint8_t di = feedback_di_for_load(&cfg, load_index);
@@ -493,7 +502,7 @@ esp_err_t app_control_get_feedback(uint8_t load_index, bool *state)
 ctl_result_t app_control_set_state_verified(uint8_t load_index, bool on,
                                             uint32_t timeout_ms)
 {
-    if (load_index >= APP_LOAD_COUNT) return CTL_ERR_ARG;
+    if (!app_load_supported(load_index)) return CTL_ERR_ARG;
     bool feedback = false;
     const esp_err_t feedback_err = app_control_get_feedback(load_index, &feedback);
     if (feedback_err == ESP_ERR_NOT_FOUND) return app_control_set_state(load_index, on);
@@ -569,7 +578,7 @@ void app_control_process_feedback(const sensor_cycle_t *cycle)
 
 ctl_result_t app_control_set_delay(uint8_t index, bool mode, uint16_t delay_min, uint16_t duration_min)
 {
-    if (index >= APP_LOAD_COUNT || delay_min > 1440U || duration_min > 1440U) return CTL_ERR_ARG;
+    if (!app_load_supported(index) || delay_min > 1440U || duration_min > 1440U) return CTL_ERR_ARG;
     if (!s_initialized) return CTL_ERR_INTERNAL;
 
     xSemaphoreTake(s_lock, portMAX_DELAY);
@@ -601,7 +610,7 @@ ctl_result_t app_control_set_delay(uint8_t index, bool mode, uint16_t delay_min,
 
 ctl_result_t app_control_stop_delay(uint8_t index)
 {
-    if (index >= APP_LOAD_COUNT) return CTL_ERR_ARG;
+    if (!app_load_supported(index)) return CTL_ERR_ARG;
     if (!s_initialized) return CTL_ERR_INTERNAL;
     xSemaphoreTake(s_lock, portMAX_DELAY);
     bool was_active = s_load[index].delay_active;
@@ -613,7 +622,7 @@ ctl_result_t app_control_stop_delay(uint8_t index)
 
 ctl_result_t app_control_set_enabled(uint8_t index, bool enabled)
 {
-    if (index >= APP_LOAD_COUNT) return CTL_ERR_ARG;
+    if (!app_load_supported(index)) return CTL_ERR_ARG;
     if (!s_initialized) return CTL_ERR_INTERNAL;
 
     xSemaphoreTake(s_lock, portMAX_DELAY);

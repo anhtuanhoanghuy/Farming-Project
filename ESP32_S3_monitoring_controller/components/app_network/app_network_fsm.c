@@ -4,6 +4,7 @@
 
 #include "app_network_eth.h"
 #include "app_network_wifi.h"
+#include "defines.h"
 #include "app_log.h"
 #include "esp_netif.h"
 #include "esp_system.h"
@@ -726,6 +727,9 @@ static void schedule_probe(int64_t now)
 
 static void eth_maintenance(int64_t now)
 {
+    if (!NETWORK_INTERFACE_ETHERNET) {
+        return;
+    }
     if (!s_eth_started) {
         if (now < s_next_eth_init_us) {
             return;

@@ -50,7 +50,9 @@ typedef void (*app_ble_prov_apply_cb_t)(const app_config_t *config, app_prov_app
  *   prov-config  accepts one config {ssid, password, user_id, only_use_ethernet}; answers
  *                IN_PROGRESS at once, or ERROR for an invalid request (the session stays open);
  *                both responses include the Wi-Fi STA MAC as lowercase device_id
+ *                optional only_use_4g is reserved; true returns network_4g_not_implemented
  *   prov-status  returns device_id with idle/in_progress/done and final provisioning result
+ *                idle/done include network_interfaces {ethernet,wifi,4g}, each 0 or 1
  *   wifi-scan    {"start":0} runs a Wi-Fi scan; {"start":N} pages through the cached list
  * After the first accepted config the worker calls apply_cb, saves the config when asked to, stores
  * the result and sets BIT_PROV_DONE. BIT_PROV_RESULT_SENT is set once the app has read the result.

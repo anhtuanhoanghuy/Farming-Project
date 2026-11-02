@@ -12,7 +12,7 @@ abstract final class PortIds {
   static const conditionIds = ['CON1', 'CON2'];
   static const schedulerIds = ['SHE1', 'SHE2', 'SHE3'];
 
-  /// Ports of one interface type when the snapshot does not list them yet.
+  /// Fixed protocol IDs, not the capabilities of a particular device.
   static List<String> defaultPorts(String interfaceType) =>
       switch (interfaceType) {
         rs485Type => rs485Ports,

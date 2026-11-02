@@ -387,8 +387,15 @@ class _LoadControlScreenState extends State<LoadControlScreen> {
     onAcked?.call();
   }
 
-  Future<void> _send(Map<String, Object?> payload) =>
-      MqttSessionManager.instance.publishCommandAndWaitForAck(_mac, payload);
+  Future<void> _send(Map<String, Object?> payload) async {
+    if (DeviceState.instance.snapshot?.supportsLoad(_load.portId) != true) {
+      throw StateError('Thiết bị chưa xác nhận hỗ trợ tải ${_load.portId}.');
+    }
+    await MqttSessionManager.instance.publishCommandAndWaitForAck(
+      _mac,
+      payload,
+    );
+  }
 
   void _requireEnabled() {
     if (!_load.enabled) {
@@ -1306,10 +1313,12 @@ class _LoadControlScreenState extends State<LoadControlScreen> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: _load,
+    listenable: Listenable.merge([_load, DeviceState.instance]),
     builder: (context, _) {
       final conditions = _sortedConditions;
       final schedules = _sortedSchedules;
+      final supported =
+          DeviceState.instance.snapshot?.supportsLoad(_load.portId) ?? false;
       return ScreenScaffold(
         title: '${_load.name}',
         showBack: true,
@@ -1317,30 +1326,39 @@ class _LoadControlScreenState extends State<LoadControlScreen> {
         navIndex: widget.inShell ? null : 0,
         onNavTap: widget.inShell ? null : (i) => AppRoutes.openTab(context, i),
         titleTrailing: IconButton(
-          onPressed: _rename,
+          onPressed: supported ? _rename : null,
           tooltip: 'Đổi tên tải',
           icon: const Icon(Icons.edit_rounded, color: AppColors.primary),
         ),
         headerBottom: _stateChip(),
-        headerTrailing: AppMoreMenu<void>(
-          itemBuilder: (context) => [
-            PopupMenuItem<void>(
-              enabled: false,
-              child: MenuSwitchRow(
-                label: 'Cho phép điều khiển tải',
-                value: _load.enabled,
-                onChanged: _toggleEnabled,
+        headerTrailing: !supported
+            ? null
+            : AppMoreMenu<void>(
+                itemBuilder: (context) => [
+                  PopupMenuItem<void>(
+                    enabled: false,
+                    child: MenuSwitchRow(
+                      label: 'Cho phép điều khiển tải',
+                      value: _load.enabled,
+                      onChanged: _toggleEnabled,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
         body: SingleChildScrollView(
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (_snapshotLoad == null)
+              if (!supported && DeviceState.instance.snapshot != null)
+                const AppCard(
+                  child: Text(
+                    'Tải không được thiết bị hỗ trợ hoặc chưa đồng bộ capabilities.',
+                    style: AppTextStyles.bodySecondary,
+                  ),
+                )
+              else if (_snapshotLoad == null)
                 const AppCard(
                   child: Text(
                     'Chưa nhận được cấu hình tải từ thiết bị. Đợi đồng bộ hoặc '

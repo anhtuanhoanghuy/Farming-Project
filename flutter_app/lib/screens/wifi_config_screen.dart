@@ -7,6 +7,7 @@ import '../models/scanned_device.dart';
 import '../models/wifi_network.dart';
 import '../navigation/app_routes.dart';
 import '../protocol/validators.dart';
+import '../protocol/network_interfaces.dart';
 import '../protocol/wifi_scan_messages.dart';
 import '../services/auth_service.dart';
 import '../services/ble_prov_service.dart';
@@ -35,6 +36,10 @@ class WifiConfigScreen extends StatefulWidget {
 class _WifiConfigScreenState extends State<WifiConfigScreen> {
   final _pass = TextEditingController();
   bool _ethernetOnly = false;
+  bool _cellularOnly = false;
+  bool _loadingInterfaces = true;
+  NetworkInterfaces? _interfaces;
+  String? _interfaceError;
   bool _showPassword = false;
   bool _scanning = false;
   bool _sending = false;
@@ -46,7 +51,10 @@ class _WifiConfigScreenState extends State<WifiConfigScreen> {
 
   bool get _canSend =>
       !_sending &&
+      !_loadingInterfaces &&
+      _interfaces != null &&
       (_ethernetOnly ||
+          _cellularOnly ||
           (!_scanning &&
               _selected != null &&
               WifiPasswordRule.isValid(_pass.text)));
@@ -55,7 +63,7 @@ class _WifiConfigScreenState extends State<WifiConfigScreen> {
   void initState() {
     super.initState();
     _pass.addListener(() => setState(() {}));
-    _scan();
+    _loadInterfaces();
   }
 
   @override
@@ -65,8 +73,40 @@ class _WifiConfigScreenState extends State<WifiConfigScreen> {
     super.dispose();
   }
 
+  Future<void> _loadInterfaces() async {
+    setState(() {
+      _loadingInterfaces = true;
+      _interfaceError = null;
+    });
+    try {
+      final interfaces = await _client.readNetworkInterfaces();
+      if (!mounted) return;
+      setState(() {
+        _interfaces = interfaces;
+        _loadingInterfaces = false;
+        _ethernetOnly = !interfaces.wifi && interfaces.ethernet;
+        _cellularOnly = !interfaces.wifi && interfaces.cellular;
+      });
+      if (interfaces.wifi) await _scan();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingInterfaces = false;
+        _interfaceError = userErrorText(
+          'Không đọc được khả năng mạng từ thiết bị. Kiểm tra firmware và thử lại.',
+          error,
+        );
+      });
+    }
+  }
+
   Future<void> _scan() async {
-    if (_scanning || _ethernetOnly) return;
+    if (_scanning ||
+        _ethernetOnly ||
+        _cellularOnly ||
+        _interfaces?.wifi != true) {
+      return;
+    }
     setState(() {
       _scanning = true;
       _scanError = null;
@@ -85,10 +125,7 @@ class _WifiConfigScreenState extends State<WifiConfigScreen> {
       setState(() {
         _scanning = false;
         _scanError = e is WifiScanException && e.code == 'wifi_unavailable'
-            ? userErrorText(
-                'Wi-Fi không khả dụng trên thiết bị',
-                e,
-              )
+            ? userErrorText('Wi-Fi không khả dụng trên thiết bị', e)
             : userErrorText('Không quét được Wi-Fi', e);
       });
     }
@@ -103,15 +140,26 @@ class _WifiConfigScreenState extends State<WifiConfigScreen> {
     if (!value) _scan();
   }
 
+  void _setCellularOnly(bool value) {
+    setState(() {
+      _cellularOnly = value;
+      _selected = null;
+      _pass.clear();
+    });
+    if (!value) _scan();
+  }
+
   Future<void> _send() async {
+    if (!_canSend) return;
     setState(() => _sending = true);
     try {
       final userId = AuthService.requireUserId();
       final result = await _client.sendConfig(
-        ssid: _ethernetOnly ? '' : _selected!.ssid,
-        password: _ethernetOnly ? '' : _pass.text,
+        ssid: _ethernetOnly || _cellularOnly ? '' : _selected!.ssid,
+        password: _ethernetOnly || _cellularOnly ? '' : _pass.text,
         userId: userId,
         onlyUseEthernet: _ethernetOnly,
+        onlyUse4g: _cellularOnly,
       );
       await _client.close();
       if (!mounted) return;
@@ -124,6 +172,7 @@ class _WifiConfigScreenState extends State<WifiConfigScreen> {
           deviceName: widget.args.device.name,
           result: result,
           onlyUseEthernet: _ethernetOnly,
+          onlyUse4g: _cellularOnly,
         ),
       );
     } catch (e) {
@@ -133,7 +182,7 @@ class _WifiConfigScreenState extends State<WifiConfigScreen> {
         AppRoutes.provisionFailure,
         arguments: ProvisionFailureArgs(
           deviceName: widget.args.device.name,
-          message: userErrorText('Không gửi được cấu hình Wi-Fi', e),
+          message: userErrorText('Không gửi được cấu hình mạng', e),
         ),
       );
     }
@@ -142,7 +191,7 @@ class _WifiConfigScreenState extends State<WifiConfigScreen> {
   @override
   Widget build(BuildContext context) {
     return ScreenScaffold(
-      title: 'Cấu hình Wi-Fi',
+      title: 'Cấu hình mạng',
       showBack: true,
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -154,36 +203,77 @@ class _WifiConfigScreenState extends State<WifiConfigScreen> {
               style: AppTextStyles.heading,
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Kết nối tới Wi-Fi hoặc Ethernet mà bộ điều khiển sẽ dùng.',
+            Text(
+              _interfaces == null
+                  ? 'Đọc khả năng mạng của thiết bị qua BLE trước khi cấu hình.'
+                  : 'Thiết bị hỗ trợ: ${[if (_interfaces!.wifi) 'Wi-Fi', if (_interfaces!.ethernet) 'Ethernet', if (_interfaces!.cellular) '4G'].join(' và ')}.',
               style: AppTextStyles.bodySecondary,
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Lựa chọn phương thức kết nối',
-              style: AppTextStyles.label,
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: Checkbox(
-                    value: _ethernetOnly,
-                    onChanged: _sending
-                        ? null
-                        : (v) => _setEthernetOnly(v ?? false),
-                  ),
+            if (_loadingInterfaces)
+              const Center(child: CircularProgressIndicator())
+            else if (_interfaceError != null) ...[
+              Text(_interfaceError!, style: AppTextStyles.bodySecondary),
+              TextButton(
+                onPressed: _loadInterfaces,
+                child: const Text('Thử đọc lại khả năng mạng'),
+              ),
+            ],
+            if (_interfaces != null) ...[
+              const Text(
+                'Lựa chọn phương thức kết nối',
+                style: AppTextStyles.label,
+              ),
+              const SizedBox(height: 8),
+              if (_interfaces!.ethernet)
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Checkbox(
+                        value: _ethernetOnly,
+                        onChanged: _sending || !_interfaces!.wifi
+                            ? null
+                            : (v) => _setEthernetOnly(v ?? false),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Chỉ sử dụng Ethernet',
+                      style: AppTextStyles.body,
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                const Text('Chỉ sử dụng Ethernet', style: AppTextStyles.body),
+              if (_interfaces!.cellular)
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Checkbox(
+                        value: _cellularOnly,
+                        onChanged: _sending || !_interfaces!.wifi
+                            ? null
+                            : (v) => _setCellularOnly(v ?? false),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('Chỉ sử dụng 4G', style: AppTextStyles.body),
+                  ],
+                ),
+              if (_cellularOnly) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'Kết nối 4G cần firmware có driver modem tương ứng.',
+                  style: AppTextStyles.bodySecondary,
+                ),
               ],
-            ),
-            if (!_ethernetOnly) ...[
-              const SizedBox(height: 18),
-              _networkHeader(),
-              ..._networkSection(),
+              if (_interfaces!.wifi && !_ethernetOnly && !_cellularOnly) ...[
+                const SizedBox(height: 18),
+                _networkHeader(),
+                ..._networkSection(),
+              ],
             ],
             const SizedBox(height: 24),
             PrimaryButton(

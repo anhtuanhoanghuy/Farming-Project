@@ -25,10 +25,18 @@ class DeviceState extends ChangeNotifier {
   /// Network the ESP32 uses (`ETH` or `WIFI`): from telemetry, or from the
   /// snapshot until the first telemetry has arrived. Null when unknown. There
   /// is no "none": the ESP32 can only talk over MQTT, and losing the network
-  /// is reported by the LWT (presence offline).
+  /// is reported by the LWT (presence offline). `4G` denotes a cellular modem.
   String? get internetMethod {
     final method = _telemetry?.netInterface ?? _snapshot?.netInterface;
-    return method == 'ETH' || method == 'WIFI' ? method : null;
+    final interfaces =
+        _telemetry?.networkInterfaces ?? _snapshot?.networkInterfaces;
+    if (method == null ||
+        (interfaces != null && !interfaces.supports(method))) {
+      return null;
+    }
+    return method == 'ETH' || method == 'WIFI' || method == '4G'
+        ? method
+        : null;
   }
 
   void reset(String? deviceId) {

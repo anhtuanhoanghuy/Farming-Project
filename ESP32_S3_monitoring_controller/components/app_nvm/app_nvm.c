@@ -348,6 +348,11 @@ esp_err_t app_nvm_validate_provisioning(const app_config_t *config)
         }
     }
 
+    if ((config->only_use_ethernet && !NETWORK_INTERFACE_ETHERNET) ||
+        (!config->only_use_ethernet && !NETWORK_INTERFACE_WIFI)) {
+        ESP_LOGE(TAG, "Stored provisioning selects an unsupported network interface");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
     if (!config->only_use_ethernet) {
         size_t password_length = strlen(config->wifi_password);
         if (config->wifi_ssid[0] == '\0' ||
@@ -496,7 +501,7 @@ void app_nvm_set_default_device_cfg(device_cfg_t *cfg)
     for (size_t index = 0; index < APP_LOAD_COUNT; index++) {
         (void)snprintf(cfg->load[index].name, sizeof(cfg->load[index].name), "Load %u",
                        (unsigned)(index + 1U));
-        cfg->load[index].enabled = true;
+        cfg->load[index].enabled = app_load_supported((uint8_t)index);
         for (size_t c = 0; c < APP_CONDITIONS_PER_LOAD; c++) {
             cfg->load[index].condition[c].sensor_port = APP_PORT_NONE;
         }
@@ -511,6 +516,9 @@ esp_err_t app_nvm_validate_device_cfg(const device_cfg_t *cfg)
 
     for (size_t index = 0; index < APP_SENSOR_INTERFACE_COUNT; index++) {
         const sensor_port_cfg_t *sensor = &cfg->sensor[index];
+        if (!app_port_supported((uint8_t)index) && sensor->enabled) {
+            return ESP_ERR_NOT_SUPPORTED;
+        }
         if (!is_terminated(sensor->name, sizeof(sensor->name))) {
             return ESP_ERR_INVALID_ARG;
         }
@@ -533,6 +541,9 @@ esp_err_t app_nvm_validate_device_cfg(const device_cfg_t *cfg)
 
     for (size_t index = 0; index < APP_LOAD_COUNT; index++) {
         const load_cfg_t *load = &cfg->load[index];
+        if (!app_load_supported((uint8_t)index) && load->enabled) {
+            return ESP_ERR_NOT_SUPPORTED;
+        }
         if (!is_terminated(load->name, sizeof(load->name))) {
             return ESP_ERR_INVALID_ARG;
         }
@@ -540,6 +551,11 @@ esp_err_t app_nvm_validate_device_cfg(const device_cfg_t *cfg)
             const load_condition_cfg_t *condition = &load->condition[c];
             if (!condition->present) {
                 continue;
+            }
+            if (condition->enabled &&
+                (!app_load_supported((uint8_t)index) ||
+                 !app_port_supported(condition->sensor_port))) {
+                return ESP_ERR_NOT_SUPPORTED;
             }
             if ((condition->sensor_port >= APP_SENSOR_INTERFACE_COUNT &&
                  condition->sensor_port != APP_PORT_NONE) ||
@@ -557,6 +573,9 @@ esp_err_t app_nvm_validate_device_cfg(const device_cfg_t *cfg)
             const load_scheduler_cfg_t *scheduler = &load->scheduler[s];
             if (!scheduler->present) {
                 continue;
+            }
+            if (scheduler->enabled && !app_load_supported((uint8_t)index)) {
+                return ESP_ERR_NOT_SUPPORTED;
             }
             if ((scheduler->days_mask & 0x80U) != 0U || scheduler->on_minute_utc >= 1440U ||
                 scheduler->off_minute_utc >= 1440U ||
@@ -628,6 +647,9 @@ esp_err_t app_nvm_load_device_cfg(device_cfg_t *cfg)
             }
         }
         free(record);
+        if (app_device_cfg_apply_capabilities(cfg)) {
+            ESP_LOGW(TAG, "Disabled stored settings for unsupported hardware");
+        }
         result = app_nvm_validate_device_cfg(cfg);
         if (result == ESP_OK) {
             result = app_nvm_save_device_cfg(cfg);
@@ -652,6 +674,9 @@ esp_err_t app_nvm_load_device_cfg(device_cfg_t *cfg)
         }
         memcpy(cfg->load, legacy.load, sizeof(cfg->load));
         free(record);
+        if (app_device_cfg_apply_capabilities(cfg)) {
+            ESP_LOGW(TAG, "Disabled stored settings for unsupported hardware");
+        }
         result = app_nvm_validate_device_cfg(cfg);
         if (result == ESP_OK) result = app_nvm_save_device_cfg(cfg);
         if (result == ESP_OK) {
@@ -670,7 +695,12 @@ esp_err_t app_nvm_load_device_cfg(device_cfg_t *cfg)
     memcpy(cfg, payload, sizeof(*cfg));
     free(record);
 
+    bool capabilities_changed = app_device_cfg_apply_capabilities(cfg);
     result = app_nvm_validate_device_cfg(cfg);
+    if (result == ESP_OK && capabilities_changed) {
+        ESP_LOGW(TAG, "Hardware capabilities changed; disabling absent ports and their automation");
+        result = app_nvm_save_device_cfg(cfg);
+    }
     if (result != ESP_OK) {
         app_nvm_set_default_device_cfg(cfg);
     }

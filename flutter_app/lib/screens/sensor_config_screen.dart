@@ -77,19 +77,23 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
       DeviceState.instance.snapshot?.input(portId);
 
   List<String> _freePorts(String type) =>
-      DeviceState.instance.snapshot?.freePortsFor(type) ??
-      PortIds.defaultPorts(type);
+      DeviceState.instance.snapshot?.freePortsFor(type) ?? const [];
+
+  bool _supportsType(String type) =>
+      DeviceState.instance.snapshot?.portsFor(type).isNotEmpty ?? false;
+
+  bool get _portSupported =>
+      DeviceState.instance.snapshot?.supportsPort(_portId) ?? false;
 
   /// Ports offered in the dropdown: the sensor's own port when it is saved,
   /// otherwise the ports without a sensor.
   List<String> get _portOptions {
-    if (_typeLocked) return [_portId];
-    final free = _freePorts(_type);
-    return free.contains(_portId) ? free : [_portId, ...free];
+    if (_typeLocked) return _portSupported ? [_portId] : const [];
+    return _freePorts(_type);
   }
 
   void _selectType(String type) {
-    if (type == _type || _typeLocked) return;
+    if (type == _type || _typeLocked || !_supportsType(type)) return;
     final free = _freePorts(type);
     if (free.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -141,6 +145,9 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
     var commandSent = false;
     try {
       final name = _name.text.trim();
+      if (!_portSupported) {
+        throw const FormatException('Thiết bị không hỗ trợ cổng cảm biến này.');
+      }
       if (name.isEmpty) {
         throw const FormatException('Tên cảm biến không được để trống.');
       }
@@ -294,7 +301,7 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
         embedInTab: widget.inShell,
         navIndex: widget.inShell ? null : 0,
         onNavTap: widget.inShell ? null : (i) => AppRoutes.openTab(context, i),
-        headerTrailing: !_typeLocked
+        headerTrailing: !_typeLocked || !_portSupported
             ? null
             : AppMoreMenu<String>(
                 onSelected: (_) => _confirmDelete(),
@@ -328,7 +335,7 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Cho phép cảm biến'),
                   value: _enabled,
-                  onChanged: _setEnabled,
+                  onChanged: _portSupported ? _setEnabled : null,
                 ),
               ),
               const SizedBox(height: 18),
@@ -341,8 +348,17 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
                   (PortIds.diType, 'DI'),
                 ],
                 selected: _type,
+                isOptionEnabled: _supportsType,
                 onChanged: _typeLocked ? null : _selectType,
               ),
+              if (!_supportsType(_type))
+                const Padding(
+                  padding: EdgeInsets.only(top: 6),
+                  child: Text(
+                    'Loại cảm biến này chưa được thiết bị hỗ trợ hoặc chưa đồng bộ capabilities.',
+                    style: AppTextStyles.caption,
+                  ),
+                ),
               if (_typeLocked)
                 const Padding(
                   padding: EdgeInsets.only(top: 6),
@@ -356,13 +372,13 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 key: ValueKey('port-$_type-$_portId-${_portOptions.length}'),
-                initialValue: _portId,
+                initialValue: _portOptions.contains(_portId) ? _portId : null,
                 decoration: _dropdownDecoration,
                 items: [
                   for (final port in _portOptions)
                     DropdownMenuItem<String>(value: port, child: Text(port)),
                 ],
-                onChanged: _typeLocked
+                onChanged: _typeLocked || _portOptions.isEmpty
                     ? null
                     : (port) {
                         if (port == null) return;
@@ -407,8 +423,11 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
               PrimaryButton(
                 label: _saving ? 'Đang chờ thiết bị xác nhận...' : 'Lưu',
                 icon: _saving ? Icons.sync : Icons.send_rounded,
-                enabled: !_saving,
-                onPressed: _saving ? null : _save,
+                enabled:
+                    !_saving &&
+                    _portSupported &&
+                    _portOptions.contains(_portId),
+                onPressed: _saving || !_portSupported ? null : _save,
               ),
             ],
           ),

@@ -186,7 +186,7 @@ static bool req_load(parse_ctx_t *c, uint8_t *out)
     const char *s = req_string(c, "load_id");
     if (s == NULL) return false;
     uint8_t index = app_device_load_from_name(s);
-    if (index == APP_PORT_NONE) return fail(c, MQTT_PROTO_INVALID_VALUE, "load_id", "expected DO1..DO4");
+    if (index == APP_PORT_NONE) return fail(c, MQTT_PROTO_INVALID_VALUE, "load_id", "unsupported load");
     *out = index;
     return true;
 }
@@ -196,7 +196,7 @@ static bool req_port(parse_ctx_t *c, const char *key, uint8_t *out)
     const char *s = req_string(c, key);
     if (s == NULL) return false;
     uint8_t port = app_device_port_from_name(s);
-    if (port == APP_PORT_NONE) return fail(c, MQTT_PROTO_INVALID_VALUE, key, "expected RS1..RS4, AN1, DI1..DI4");
+    if (port == APP_PORT_NONE) return fail(c, MQTT_PROTO_INVALID_VALUE, key, "unsupported sensor port");
     *out = port;
     return true;
 }
@@ -514,7 +514,7 @@ static void add_port_list(cJSON *parent, const char *key, bool runtime_available
                           uint8_t first, uint8_t count)
 {
     cJSON *cap = cJSON_CreateObject();
-    cJSON_AddBoolToObject(cap, "supported", true);
+    cJSON_AddBoolToObject(cap, "supported", count > 0U);
     if (with_runtime) cJSON_AddBoolToObject(cap, "runtime_available", runtime_available);
     cJSON_AddNumberToObject(cap, "count", count);
     cJSON *ports = cJSON_AddArrayToObject(cap, "port_lists");
@@ -628,6 +628,10 @@ int mqtt_proto_serialize_snapshot(const mqtt_proto_snapshot_t *s, char *out, siz
     cJSON_AddStringToObject(o, "boot_id", s->boot_id != NULL ? s->boot_id : "00000000");
     cJSON_AddStringToObject(o, "device_name", s->device_name);
     cJSON_AddStringToObject(o, "net_interface", s->net_interface != NULL ? s->net_interface : "NONE");
+    cJSON *network = cJSON_AddObjectToObject(o, "network_interfaces");
+    cJSON_AddNumberToObject(network, "ethernet", NETWORK_INTERFACE_ETHERNET);
+    cJSON_AddNumberToObject(network, "wifi", NETWORK_INTERFACE_WIFI);
+    cJSON_AddNumberToObject(network, "4g", NETWORK_INTERFACE_4G);
     cJSON_AddStringToObject(o, "ssid", s->ssid);
     cJSON_AddStringToObject(o, "ip_address", s->ip_address);
     cJSON_AddNumberToObject(o, "uptime_ms", s->uptime_ms);
@@ -638,18 +642,18 @@ int mqtt_proto_serialize_snapshot(const mqtt_proto_snapshot_t *s, char *out, siz
     add_port_list(caps, "rs485", false, false, APP_PORT_RS485_FIRST, APP_RS485_INTERFACE_COUNT);
     add_port_list(caps, "analog_4_20ma", false, true, APP_PORT_ANALOG_FIRST, APP_ANALOG_4_20MA_INTERFACE_COUNT);
     add_port_list(caps, "digital_inputs", true, true, APP_PORT_DI_FIRST, APP_DI_COUNT);
-    add_port_list(caps, "loads", false, false, 0U, APP_LOAD_COUNT);
+    add_port_list(caps, "loads", false, false, 0U, APP_DO_COUNT);
 
     unsigned rs485_used = 0, analog_used = 0, di_used = 0, loads_used = 0;
     for (uint8_t p = 0; p < APP_SENSOR_INTERFACE_COUNT; p++) {
-        if (!s->cfg.sensor[p].configured) continue;
+        if (!app_port_supported(p) || !s->cfg.sensor[p].configured) continue;
         switch (app_port_interface(p)) {
         case SENSOR_INTERFACE_RS485: rs485_used++; break;
         case SENSOR_INTERFACE_ANALOG_4_20MA: analog_used++; break;
         default: di_used++; break;
         }
     }
-    for (uint8_t i = 0; i < APP_LOAD_COUNT; i++) {
+    for (uint8_t i = 0; i < APP_DO_COUNT; i++) {
         if (s->cfg.load[i].enabled) loads_used++;
     }
     cJSON *used = cJSON_AddObjectToObject(o, "runtime_interfaces");
@@ -661,7 +665,7 @@ int mqtt_proto_serialize_snapshot(const mqtt_proto_snapshot_t *s, char *out, siz
     cJSON *inputs = cJSON_AddArrayToObject(o, "input");
     for (uint8_t p = 0; p < APP_SENSOR_INTERFACE_COUNT; p++) {
         const sensor_port_cfg_t *cfg = &s->cfg.sensor[p];
-        if (!cfg->configured) continue;
+        if (!app_port_supported(p) || !cfg->configured) continue;
         cJSON *in = cJSON_CreateObject();
         cJSON_AddStringToObject(in, "interface_type", interface_name(p));
         cJSON_AddStringToObject(in, "port_id", app_device_port_name(p));
@@ -678,7 +682,7 @@ int mqtt_proto_serialize_snapshot(const mqtt_proto_snapshot_t *s, char *out, siz
     }
 
     cJSON *loads = cJSON_AddArrayToObject(o, "loads");
-    for (uint8_t i = 0; i < APP_LOAD_COUNT; i++) cJSON_AddItemToArray(loads, snapshot_load(s, i));
+    for (uint8_t i = 0; i < APP_DO_COUNT; i++) cJSON_AddItemToArray(loads, snapshot_load(s, i));
 
     cJSON *interlock = cJSON_AddObjectToObject(o, "interlock");
     cJSON_AddBoolToObject(interlock, "tripped", s->interlock_tripped);
@@ -747,13 +751,17 @@ int mqtt_proto_serialize_telemetry(const mqtt_proto_telemetry_t *t, char *out, s
     cJSON_AddNumberToObject(o, "uptime_ms", t->uptime_ms);
     cJSON_AddBoolToObject(o, "buffered", t->buffered);
     cJSON_AddStringToObject(o, "net_interface", t->net_interface != NULL ? t->net_interface : "NONE");
+    cJSON *network = cJSON_AddObjectToObject(o, "network_interfaces");
+    cJSON_AddNumberToObject(network, "ethernet", NETWORK_INTERFACE_ETHERNET);
+    cJSON_AddNumberToObject(network, "wifi", NETWORK_INTERFACE_WIFI);
+    cJSON_AddNumberToObject(network, "4g", NETWORK_INTERFACE_4G);
     if (t->has_ts) cJSON_AddNumberToObject(o, "ts", (double)t->ts_ms);
 
     cJSON *inputs = cJSON_AddArrayToObject(o, "input");
     for (uint8_t p = 0; p < t->cycle.count; p++) {
         const sensor_port_cfg_t *cfg = &t->cfg.sensor[p];
         const sensor_sample_t *sample = &t->cycle.s[p];
-        if (!cfg->configured || !cfg->enabled) continue;    /* disabled sensors are not reported */
+        if (!app_port_supported(p) || !cfg->configured || !cfg->enabled) continue;
         cJSON *in = cJSON_CreateObject();
         cJSON_AddStringToObject(in, "interface_type", interface_name(p));
         cJSON_AddStringToObject(in, "port_id", app_device_port_name(p));

@@ -58,6 +58,12 @@ static void reset_condition(load_condition_cfg_t *cond)
 
 static mqtt_proto_code_t exec_condition(const mqtt_cmd_t *cmd, char *reason, size_t cap)
 {
+    if (!app_load_supported(cmd->load) || cmd->index >= APP_CONDITIONS_PER_LOAD) {
+        return set_reason(reason, cap, MQTT_PROTO_INVALID_VALUE, "load or condition is unsupported");
+    }
+    if (cmd->type == MQTT_CMD_SET_LOAD_CONDITION && !app_port_supported(cmd->cond_port)) {
+        return set_reason(reason, cap, MQTT_PROTO_INVALID_VALUE, "sensor_id is unsupported");
+    }
     device_cfg_t next;
     app_device_get(&next);
     load_cfg_t *load = &next.load[cmd->load];
@@ -79,7 +85,7 @@ static mqtt_proto_code_t exec_condition(const mqtt_cmd_t *cmd, char *reason, siz
     case MQTT_CMD_TOGGLE_LOAD_CONDITION:
         if (cmd->enabled) {
             if (!load->enabled) return set_reason(reason, cap, MQTT_PROTO_INVALID_VALUE, "load is disabled");
-            if (cond->sensor_port == APP_PORT_NONE || !next.sensor[cond->sensor_port].configured) {
+            if (!app_port_supported(cond->sensor_port) || !next.sensor[cond->sensor_port].configured) {
                 return set_reason(reason, cap, MQTT_PROTO_INVALID_VALUE, "condition has no valid sensor");
             }
         }
@@ -103,6 +109,9 @@ static mqtt_proto_code_t exec_condition(const mqtt_cmd_t *cmd, char *reason, siz
 
 static mqtt_proto_code_t exec_scheduler(const mqtt_cmd_t *cmd, char *reason, size_t cap)
 {
+    if (!app_load_supported(cmd->load) || cmd->index >= APP_SCHEDULERS_PER_LOAD) {
+        return set_reason(reason, cap, MQTT_PROTO_INVALID_VALUE, "load or scheduler is unsupported");
+    }
     device_cfg_t next;
     app_device_get(&next);
     load_cfg_t *load = &next.load[cmd->load];
@@ -147,6 +156,9 @@ static mqtt_proto_code_t exec_scheduler(const mqtt_cmd_t *cmd, char *reason, siz
 
 static mqtt_proto_code_t exec_sensor(const mqtt_cmd_t *cmd, char *reason, size_t cap)
 {
+    if (!app_port_supported(cmd->port)) {
+        return set_reason(reason, cap, MQTT_PROTO_INVALID_VALUE, "port_id is unsupported");
+    }
     device_cfg_t next;
     app_device_get(&next);
     sensor_port_cfg_t *sensor = &next.sensor[cmd->port];
@@ -284,6 +296,9 @@ mqtt_proto_code_t app_mqtt_cmd_execute(const mqtt_cmd_t *cmd, char *reason, size
     case MQTT_CMD_TOGGLE_LOAD_CAPABILITY:
         return from_ctl(app_control_set_enabled(cmd->load, cmd->action), reason, reason_cap);
     case MQTT_CMD_SET_LOAD_NAME: {
+        if (!app_load_supported(cmd->load)) {
+            return set_reason(reason, reason_cap, MQTT_PROTO_INVALID_VALUE, "load_id is unsupported");
+        }
         device_cfg_t next;
         app_device_get(&next);
         strlcpy(next.load[cmd->load].name, cmd->name, sizeof(next.load[cmd->load].name));

@@ -47,7 +47,7 @@ esp_err_t app_device_init(void)
         if (loaded.sensor[i].configured) sensors++;
     }
     ESP_LOGI(TAG, "Config ready: %u sensor(s) configured, %u load(s)", sensors,
-             (unsigned)APP_LOAD_COUNT);
+             (unsigned)APP_DO_COUNT);
     return ESP_OK;
 }
 
@@ -97,7 +97,7 @@ uint8_t app_device_port_from_name(const char *name)
         return APP_PORT_NONE;
     }
     for (uint8_t i = 0; i < APP_SENSOR_INTERFACE_COUNT; i++) {
-        if (strcmp(name, k_port_names[i]) == 0) {
+        if (app_port_supported(i) && strcmp(name, k_port_names[i]) == 0) {
             return i;
         }
     }
@@ -115,7 +115,7 @@ uint8_t app_device_load_from_name(const char *name)
         return APP_PORT_NONE;
     }
     for (uint8_t i = 0; i < APP_LOAD_COUNT; i++) {
-        if (strcmp(name, k_load_names[i]) == 0) {
+        if (app_load_supported(i) && strcmp(name, k_load_names[i]) == 0) {
             return i;
         }
     }

@@ -39,7 +39,7 @@ esp_err_t app_nvm_load_config(app_config_t *config);
 /* Saves one versioned blob; callers must pass a fully initialized config. */
 esp_err_t app_nvm_save_config(const app_config_t *config);
 
-/* No sensors configured, four enabled loads named "Load n" without conditions or schedules. */
+/* No sensors configured; only supported loads enabled, named "Load n", with no automation. */
 void app_nvm_set_default_device_cfg(device_cfg_t *cfg);
 esp_err_t app_nvm_validate_device_cfg(const device_cfg_t *cfg);
 /* Fills defaults first; returns ESP_ERR_NVS_NOT_FOUND when nothing was stored yet. */

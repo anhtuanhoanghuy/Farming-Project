@@ -10,6 +10,7 @@ class AppChoiceButtons<T> extends StatelessWidget {
     required this.options,
     required this.selected,
     required this.onChanged,
+    this.isOptionEnabled,
   });
 
   static const _accent = Color(0xFF447573);
@@ -21,6 +22,7 @@ class AppChoiceButtons<T> extends StatelessWidget {
 
   /// Null disables every button.
   final ValueChanged<T>? onChanged;
+  final bool Function(T)? isOptionEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -36,16 +38,25 @@ class AppChoiceButtons<T> extends StatelessWidget {
 
   Widget _button(T value, String label) {
     final isSelected = value == selected;
+    final supported = isOptionEnabled?.call(value) ?? true;
     final textStyle = AppTextStyles.button.copyWith(
       fontWeight: FontWeight.w700,
-      color: isSelected ? Colors.white : _accent,
+      color: !supported
+          ? Colors.grey
+          : isSelected
+          ? Colors.white
+          : _accent,
     );
     return Material(
-      color: isSelected ? _accent : Colors.white,
+      color: !supported
+          ? const Color(0xFFF1F1F1)
+          : isSelected
+          ? _accent
+          : Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: isSelected ? _accent : _unselectedBorder,
+          color: supported && isSelected ? _accent : _unselectedBorder,
           width: 1.5,
         ),
       ),
@@ -53,7 +64,7 @@ class AppChoiceButtons<T> extends StatelessWidget {
         customBorder: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        onTap: onChanged == null ? null : () => onChanged!(value),
+        onTap: onChanged == null || !supported ? null : () => onChanged!(value),
         child: SizedBox(
           height: 56,
           child: Center(
@@ -61,9 +72,13 @@ class AppChoiceButtons<T> extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(label, style: textStyle),
-                if (isSelected) ...[
+                if (isSelected && supported) ...[
                   const SizedBox(width: 4),
-                  const Icon(Icons.check_rounded, size: 18, color: Colors.white),
+                  const Icon(
+                    Icons.check_rounded,
+                    size: 18,
+                    color: Colors.white,
+                  ),
                 ],
               ],
             ),

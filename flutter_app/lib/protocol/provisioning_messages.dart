@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'network_interfaces.dart';
+
 class ProvisioningMessages {
   ProvisioningMessages._();
 
@@ -9,16 +11,23 @@ class ProvisioningMessages {
     required String password,
     required String userId,
     required bool onlyUseEthernet,
-  }) => Uint8List.fromList(
-    utf8.encode(
-      jsonEncode({
-        'ssid': ssid,
-        'password': password,
-        'user_id': userId,
-        'only_use_ethernet': onlyUseEthernet,
-      }),
-    ),
-  );
+    bool onlyUse4g = false,
+  }) {
+    if (onlyUseEthernet && onlyUse4g) {
+      throw ArgumentError('Không thể chọn Ethernet-only và 4G-only đồng thời');
+    }
+    return Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'ssid': ssid,
+          'password': password,
+          'user_id': userId,
+          'only_use_ethernet': onlyUseEthernet,
+          if (onlyUse4g) 'only_use_4g': true,
+        }),
+      ),
+    );
+  }
 
   static Uint8List statusRequest() => Uint8List.fromList(utf8.encode('{}'));
 
@@ -40,16 +49,21 @@ class ProvisioningMessages {
     final json = _decodeObject(response);
     final state = _requiredString(json, 'state');
     final deviceId = _deviceId(json);
+    final interfaces = json.containsKey('network_interfaces')
+        ? NetworkInterfaces.fromJson(json['network_interfaces'])
+        : null;
     switch (state) {
       case 'idle':
         return ProvisioningStatus(
           state: ProvisioningState.idle,
           deviceId: deviceId,
+          networkInterfaces: interfaces,
         );
       case 'in_progress':
         return ProvisioningStatus(
           state: ProvisioningState.inProgress,
           deviceId: deviceId,
+          networkInterfaces: interfaces,
         );
       case 'done':
         final status = _requiredString(json, 'status');
@@ -68,6 +82,7 @@ class ProvisioningMessages {
         return ProvisioningStatus(
           state: ProvisioningState.done,
           deviceId: deviceId,
+          networkInterfaces: interfaces,
           status: status,
           saved: saved,
           attempts: attempts,
@@ -141,6 +156,7 @@ class ProvisioningStatus {
     this.code,
     this.reason,
     this.message,
+    this.networkInterfaces,
   });
 
   final ProvisioningState state;
@@ -153,4 +169,5 @@ class ProvisioningStatus {
   final String? code;
   final String? reason;
   final String? message;
+  final NetworkInterfaces? networkInterfaces;
 }

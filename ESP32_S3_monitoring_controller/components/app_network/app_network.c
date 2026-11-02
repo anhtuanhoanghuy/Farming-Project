@@ -5,6 +5,7 @@
 #include "app_network_eth.h"
 #include "app_network_fsm.h"
 #include "app_network_wifi.h"
+#include "defines.h"
 #include "esp_event.h"
 #include "app_log.h"
 #include "esp_netif.h"
@@ -150,8 +151,9 @@ esp_err_t app_network_provision_connect(const app_config_t *config, app_prov_net
 
     /* Started first so its DHCP runs while Wi-Fi is being tried. */
     int64_t eth_deadline = esp_timer_get_time() + (int64_t)APP_PROV_ETH_WAIT_MS * 1000;
-    bool eth_started = app_eth_w5500_init() == ESP_OK && app_eth_w5500_start() == ESP_OK;
-    if (!eth_started) {
+    bool eth_started = NETWORK_INTERFACE_ETHERNET &&
+                       app_eth_w5500_init() == ESP_OK && app_eth_w5500_start() == ESP_OK;
+    if (NETWORK_INTERFACE_ETHERNET && !eth_started) {
         ESP_LOGW(TAG, "Ethernet not available during provisioning");
     }
 

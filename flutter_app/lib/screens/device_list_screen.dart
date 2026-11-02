@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../models/device_record.dart';
 import '../models/device_selection.dart';
 import '../navigation/app_routes.dart';
+import '../protocol/device_snapshot.dart';
 import '../services/crud_api.dart';
 import '../services/device_repository.dart';
 import '../services/mqtt_session_manager.dart';
@@ -180,10 +183,17 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   }
 
   static String _detail(DeviceRecord device) {
+    final message = MqttSessionManager.instance.latestSnapshot(
+      device.macAddress,
+    );
+    final json = message == null ? null : jsonDecode(message.payload);
+    final snapshot = json is Map
+        ? DeviceSnapshot.tryParse(json, message!.receivedAt)
+        : null;
     String count(int? value, String unit) =>
         value == null ? '? $unit' : '$value $unit';
-    return 'Tối đa ${count(device.maxSensorCount, 'cảm biến')} · '
-        '${count(device.maxLoadCount, 'tải')}';
+    return 'Tối đa ${count(snapshot?.capabilities.maxSensorCount ?? device.maxSensorCount, 'cảm biến')} · '
+        '${count(snapshot?.capabilities.maxLoadCount ?? device.maxLoadCount, 'tải')}';
   }
 }
 

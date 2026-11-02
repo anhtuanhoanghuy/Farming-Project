@@ -207,7 +207,7 @@ static void update_status_led_modes(int64_t now_us)
 
 #if APP_PIN_LED_LOAD >= 0
     bool any_load_on = false;
-    for (uint8_t load_id = 1U; load_id <= APP_LOAD_COUNT; load_id++) {
+    for (uint8_t load_id = 1U; load_id <= APP_DO_COUNT; load_id++) {
         load_runtime_t runtime = {0};
         esp_err_t err = app_control_get_load_runtime(load_id, &runtime);
         if (err != ESP_OK) {

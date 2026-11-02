@@ -607,6 +607,7 @@ class _DeviceSummaryCard extends StatelessWidget {
                   ? switch (DeviceState.instance.internetMethod) {
                       'WIFI' => 'Wi-Fi · đã kết nối',
                       'ETH' => 'Ethernet · đã kết nối',
+                      '4G' => '4G · đã kết nối',
                       _ => null,
                     }
                   : null;
@@ -663,7 +664,10 @@ class _LoadsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge(LoadController.loads),
+    listenable: Listenable.merge([
+      ...LoadController.loads,
+      DeviceState.instance,
+    ]),
     builder: (context, _) {
       final enabledLoads = [
         for (final load in LoadController.loads)
@@ -679,7 +683,7 @@ class _LoadsTab extends StatelessWidget {
         children: [
           const _DeviceAlerts(),
           Text(
-            'Tải hiện tại · ${LoadController.loads.length} tải',
+            'Tải hiện tại · ${DeviceState.instance.snapshot?.capabilities.maxLoadCount ?? 0} tải hỗ trợ',
             style: AppTextStyles.sectionTitle,
           ),
           const SizedBox(height: 12),
@@ -736,14 +740,19 @@ class _LoadCard extends StatelessWidget {
   void _setState(BuildContext context, bool state) {
     load.requestOnOff(
       state,
-      send: (state) => MqttSessionManager.instance.publishCommandAndWaitForAck(
-        device.deviceId,
-        MqttPayloads.setLoadState(
-          cmdId: MqttPayloads.newCommandId(),
-          loadId: load.portId,
-          on: state,
-        ),
-      ),
+      send: (state) async {
+        if (DeviceState.instance.snapshot?.supportsLoad(load.portId) != true) {
+          throw StateError('Thiết bị chưa xác nhận hỗ trợ tải ${load.portId}.');
+        }
+        await MqttSessionManager.instance.publishCommandAndWaitForAck(
+          device.deviceId,
+          MqttPayloads.setLoadState(
+            cmdId: MqttPayloads.newCommandId(),
+            loadId: load.portId,
+            on: state,
+          ),
+        );
+      },
       onError: (error) {
         appMessengerKey.currentState?.showSnackBar(
           SnackBar(
@@ -765,6 +774,22 @@ class _LoadCard extends StatelessWidget {
         MqttSessionManager.instance,
       ]),
       builder: (context, _) {
+        final snapshot = DeviceState.instance.snapshot;
+        if (snapshot?.supportsLoad(load.portId) != true) {
+          return AppCard(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${load.portId} · ${snapshot == null ? 'Đang chờ đồng bộ' : 'Không hỗ trợ'}',
+                    style: AppTextStyles.bodySecondary,
+                  ),
+                ),
+                const Switch(value: false, onChanged: null),
+              ],
+            ),
+          );
+        }
         final connected = MqttSessionManager.instance.isConnected;
         final online = DevicePresence.instance.isOnline(device.deviceId);
         final known = load.stateKnown && connected && online != false;

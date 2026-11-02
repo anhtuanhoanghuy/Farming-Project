@@ -40,10 +40,7 @@ void main() {
     );
     final bytes = MqttSessionManager.jsonPayload(jsonEncode(payload)).payload!;
     expect(utf8.decode(bytes), jsonEncode(payload));
-    expect(
-      (jsonDecode(utf8.decode(bytes)) as Map)['name'],
-      'Quạt nước số 1',
-    );
+    expect((jsonDecode(utf8.decode(bytes)) as Map)['name'], 'Quạt nước số 1');
   });
 
   late MqttSessionManager manager;
@@ -58,6 +55,31 @@ void main() {
   });
 
   tearDown(() => manager.dispose());
+
+  test('snapshot capability changes notify device list listeners', () {
+    var updates = 0;
+    manager.addListener(() => updates++);
+    manager.dispatch(_message(MqttDeviceTopicKind.status, sampleSnapshot()));
+    expect(updates, 1);
+    final reduced = sampleSnapshot();
+    final capabilities = reduced['capabilities']! as Map<String, Object?>;
+    capabilities['analog_4_20ma'] = {
+      'supported': false,
+      'count': 0,
+      'port_lists': <String>[],
+    };
+    manager.dispatch(_message(MqttDeviceTopicKind.status, reduced));
+    expect(updates, 2);
+    final cached =
+        jsonDecode(manager.latestSnapshot(deviceId)!.payload)
+            as Map<String, dynamic>;
+    expect((cached['capabilities'] as Map)['analog_4_20ma']['count'], 0);
+    manager.dispatch(
+      _message(MqttDeviceTopicKind.status, {'type': 'LWT', 'state': 'offline'}),
+    );
+    expect(updates, 3);
+    expect(manager.latestSnapshot(deviceId), isNull);
+  });
 
   test('an ok ACK with the same cmd_id completes the command', () async {
     final payload = MqttPayloads.setLoadState(
@@ -76,31 +98,34 @@ void main() {
     expect(ack.code, 'OK');
   });
 
-  test('an error ACK throws a Vietnamese message with code and reason', () async {
-    final result = manager.publishCommandAndWaitForAck(
-      deviceId,
-      MqttPayloads.setLoadState(cmdId: 'c2', loadId: 'DO1', on: true),
-    );
-    await pumpEventQueue();
-    manager.dispatch(
-      _message(
-        MqttDeviceTopicKind.ack,
-        _ack('c2', code: 'INVALID_VALUE', reason: 'load is disabled'),
-      ),
-    );
-    await expectLater(
-      result,
-      throwsA(
-        isA<MqttCommandException>()
-            .having(
-              (e) => e.message,
-              'message',
-              'ESP32 từ chối: INVALID_VALUE (load is disabled)',
-            )
-            .having((e) => e.ack?.isSuccess, 'ack.isSuccess', false),
-      ),
-    );
-  });
+  test(
+    'an error ACK throws a Vietnamese message with code and reason',
+    () async {
+      final result = manager.publishCommandAndWaitForAck(
+        deviceId,
+        MqttPayloads.setLoadState(cmdId: 'c2', loadId: 'DO1', on: true),
+      );
+      await pumpEventQueue();
+      manager.dispatch(
+        _message(
+          MqttDeviceTopicKind.ack,
+          _ack('c2', code: 'INVALID_VALUE', reason: 'load is disabled'),
+        ),
+      );
+      await expectLater(
+        result,
+        throwsA(
+          isA<MqttCommandException>()
+              .having(
+                (e) => e.message,
+                'message',
+                'ESP32 từ chối: INVALID_VALUE (load is disabled)',
+              )
+              .having((e) => e.ack?.isSuccess, 'ack.isSuccess', false),
+        ),
+      );
+    },
+  );
 
   test('no ACK in time fails with a clear message', () async {
     await expectLater(
@@ -134,7 +159,9 @@ void main() {
   test('messages are forwarded to listeners', () async {
     final received = <MqttDeviceMessage>[];
     final subscription = manager.messages.listen(received.add);
-    manager.dispatch(_message(MqttDeviceTopicKind.telemetry, sampleTelemetry()));
+    manager.dispatch(
+      _message(MqttDeviceTopicKind.telemetry, sampleTelemetry()),
+    );
     await pumpEventQueue();
     await subscription.cancel();
     expect(received.single.kind, MqttDeviceTopicKind.telemetry);

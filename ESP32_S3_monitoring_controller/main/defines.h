@@ -1,15 +1,57 @@
 #ifndef DEFINES_H
 #define DEFINES_H
 
-#define APP_RS485_INTERFACE_COUNT 4
-#define APP_ANALOG_4_20MA_INTERFACE_COUNT 1
-#define APP_DI_COUNT 4
-#define APP_DO_COUNT 4
+#ifndef NETWORK_INTERFACE_ETHERNET
+#define NETWORK_INTERFACE_ETHERNET 1
+#endif
+#ifndef NETWORK_INTERFACE_WIFI
+#define NETWORK_INTERFACE_WIFI 1
+#endif
+#ifndef NETWORK_INTERFACE_4G
+#define NETWORK_INTERFACE_4G 0
+#endif
 
-/* Every input port the protocol can address: RS1..RS4, AN1, DI1..DI4 (in that order). */
+#if (NETWORK_INTERFACE_ETHERNET != 0 && NETWORK_INTERFACE_ETHERNET != 1) || \
+    (NETWORK_INTERFACE_WIFI != 0 && NETWORK_INTERFACE_WIFI != 1) || \
+    (NETWORK_INTERFACE_4G != 0 && NETWORK_INTERFACE_4G != 1)
+#error "Network interface flags must be 0 or 1"
+#endif
+#if NETWORK_INTERFACE_ETHERNET && NETWORK_INTERFACE_4G
+#error "Ethernet and 4G cannot be enabled together"
+#endif
+#if !NETWORK_INTERFACE_ETHERNET && !NETWORK_INTERFACE_WIFI && !NETWORK_INTERFACE_4G
+#error "At least one network interface must be enabled"
+#endif
+
+#ifndef APP_RS485_INTERFACE_COUNT
+#define APP_RS485_INTERFACE_COUNT 4
+#endif
+#ifndef APP_ANALOG_4_20MA_INTERFACE_COUNT
+#define APP_ANALOG_4_20MA_INTERFACE_COUNT 0
+#endif
+#ifndef APP_DI_COUNT
+#define APP_DI_COUNT 4
+#endif
+#ifndef APP_DO_COUNT
+#define APP_DO_COUNT 4
+#endif
+
+/* Fixed protocol/NVM slots; capability counts must never change their layout. */
+#define APP_RS485_SLOT_COUNT 4
+#define APP_ANALOG_SLOT_COUNT 1
+#define APP_DI_SLOT_COUNT 4
+#define APP_LOAD_COUNT 4
 #define APP_SENSOR_INTERFACE_COUNT \
+    (APP_RS485_SLOT_COUNT + APP_ANALOG_SLOT_COUNT + APP_DI_SLOT_COUNT)
+#define APP_SUPPORTED_SENSOR_COUNT \
     (APP_RS485_INTERFACE_COUNT + APP_ANALOG_4_20MA_INTERFACE_COUNT + APP_DI_COUNT)
-#define APP_LOAD_COUNT APP_DO_COUNT
+
+#if APP_RS485_INTERFACE_COUNT < 0 || APP_RS485_INTERFACE_COUNT > APP_RS485_SLOT_COUNT || \
+    APP_ANALOG_4_20MA_INTERFACE_COUNT < 0 || APP_ANALOG_4_20MA_INTERFACE_COUNT > APP_ANALOG_SLOT_COUNT || \
+    APP_DI_COUNT < 0 || APP_DI_COUNT > APP_DI_SLOT_COUNT || \
+    APP_DO_COUNT < 0 || APP_DO_COUNT > APP_LOAD_COUNT
+#error "Capability count exceeds the supported protocol slots"
+#endif
 
 /* Per-load limits of the protocol (CON1..CON2, SHE1..SHE3). */
 #define APP_CONDITIONS_PER_LOAD 2

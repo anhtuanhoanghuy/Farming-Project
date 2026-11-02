@@ -1,4 +1,5 @@
 import 'port_ids.dart';
+import 'network_interfaces.dart';
 
 /// One measured value of a sensor, with the name and unit the ESP32 sent.
 /// Digital inputs report a [bool]; everything else a number.
@@ -77,6 +78,7 @@ class DeviceTelemetry {
     this.uptimeMs,
     this.buffered = false,
     this.netInterface,
+    this.networkInterfaces,
     this.ts,
     this.errorMask = 0,
   });
@@ -87,15 +89,22 @@ class DeviceTelemetry {
     if (input is! List) return null;
     final errors = json['errors'];
     final method = json['net_interface'];
+    final interfaces = json.containsKey('network_interfaces')
+        ? NetworkInterfaces.tryParse(json['network_interfaces'])
+        : null;
+    if (json.containsKey('network_interfaces') && interfaces == null) {
+      return null;
+    }
     return DeviceTelemetry(
       receivedAt: at,
+      networkInterfaces: interfaces,
       seq: json['seq'] is num ? (json['seq'] as num).toInt() : 0,
       bootId: json['boot_id'] is String ? json['boot_id'] as String : null,
       uptimeMs: json['uptime_ms'] is num
           ? (json['uptime_ms'] as num).toInt()
           : null,
       buffered: json['buffered'] == true,
-      netInterface: method == 'WIFI' || method == 'ETH'
+      netInterface: method == 'WIFI' || method == 'ETH' || method == '4G'
           ? method as String
           : null,
       ts: json['ts'] is num ? (json['ts'] as num).toInt() : null,
@@ -114,8 +123,9 @@ class DeviceTelemetry {
   /// True when the ESP32 sends a reading it stored while offline.
   final bool buffered;
 
-  /// `WIFI` or `ETH`.
+  /// `WIFI`, `ETH` or `4G`.
   final String? netInterface;
+  final NetworkInterfaces? networkInterfaces;
   final int? ts;
   final List<TelemetryInput> inputs;
   final int errorMask;

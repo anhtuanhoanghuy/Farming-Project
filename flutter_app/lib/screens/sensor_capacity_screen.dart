@@ -30,13 +30,13 @@ class SensorCapacityScreen extends StatelessWidget {
   final bool inShell;
 
   /// Sensors come from the snapshot the ESP32 publishes after each change.
-  List<SensorInput> _inputsOf(DeviceSnapshot? snapshot, String type) =>
-      [
-        for (final input in snapshot?.inputs ?? const <SensorInput>[])
-          if (input.interfaceType == type &&
-              !DeviceState.instance.isSensorHidden(input.portId))
-            input,
-      ]..sort((a, b) => a.portId.compareTo(b.portId));
+  List<SensorInput> _inputsOf(DeviceSnapshot? snapshot, String type) => [
+    for (final input in snapshot?.inputs ?? const <SensorInput>[])
+      if (input.interfaceType == type &&
+          snapshot!.supportsPort(input.portId) &&
+          !DeviceState.instance.isSensorHidden(input.portId))
+        input,
+  ]..sort((a, b) => a.portId.compareTo(b.portId));
 
   SensorConfigSelection _selectionFor(SensorInput sensor) =>
       SensorConfigSelection(
@@ -46,7 +46,6 @@ class SensorCapacityScreen extends StatelessWidget {
         name: sensor.name,
         slaveId: sensor.slaveId,
         enabled: sensor.enabled,
-
       );
 
   Future<void> _openConfig(
@@ -60,7 +59,7 @@ class SensorCapacityScreen extends StatelessWidget {
   /// can be changed on the configuration screen.
   Future<void> _add(BuildContext context, DeviceSnapshot? snapshot) async {
     for (final type in PortIds.interfaceTypes) {
-      final ports = snapshot?.freePortsFor(type) ?? PortIds.defaultPorts(type);
+      final ports = snapshot?.freePortsFor(type) ?? const <String>[];
       if (ports.isEmpty) continue;
       return _openConfig(
         context,
@@ -114,7 +113,9 @@ class SensorCapacityScreen extends StatelessWidget {
     } catch (error) {
       DeviceState.instance.restoreSensor(sensor.portId);
       appMessengerKey.currentState?.showSnackBar(
-        SnackBar(content: Text(userErrorText('Không xóa được cảm biến', error))),
+        SnackBar(
+          content: Text(userErrorText('Không xóa được cảm biến', error)),
+        ),
       );
       unawaited(LoadSync.instance.requestStatus());
     }
@@ -142,14 +143,11 @@ class SensorCapacityScreen extends StatelessWidget {
             final total = PortIds.interfaceTypes.fold<int>(
               0,
               (sum, type) =>
-                  sum +
-                  (snapshot?.portsFor(type) ?? PortIds.defaultPorts(type))
-                      .length,
+                  sum + (snapshot?.portsFor(type) ?? const <String>[]).length,
             );
             final isFull = PortIds.interfaceTypes.every(
               (type) =>
-                  (snapshot?.freePortsFor(type) ?? PortIds.defaultPorts(type))
-                      .isEmpty,
+                  (snapshot?.freePortsFor(type) ?? const <String>[]).isEmpty,
             );
             return SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),

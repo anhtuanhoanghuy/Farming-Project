@@ -318,7 +318,7 @@ class _DeviceDiagnostics extends StatelessWidget {
                   chipLabel: label,
                   kind: kind,
                   snapshot: snapshot,
-                  netInterface: snapshot?.netInterface ?? state.internetMethod,
+                  netInterface: state.internetMethod,
                 ),
                 const SizedBox(height: 20),
                 if (snapshot == null)
@@ -428,14 +428,14 @@ class _ConnectionCard extends StatelessWidget {
           _InfoRow('Kết nối mạng', switch (netInterface) {
             'WIFI' => 'Wi-Fi',
             'ETH' => 'Ethernet',
+            '4G' => '4G',
             _ => 'Chưa rõ',
           }),
-          _InfoRow(
-            'SSID',
-            netInterface == 'ETH'
-                ? 'Mạng có dây'
-                : (snap?.ssid?.isNotEmpty == true ? snap!.ssid! : 'Chưa rõ'),
-          ),
+          _InfoRow('SSID', switch (netInterface) {
+            'ETH' => 'Mạng có dây',
+            '4G' => 'Mạng di động',
+            _ => snap?.ssid?.isNotEmpty == true ? snap!.ssid! : 'Chưa rõ',
+          }),
           _InfoRow(
             'IP address',
             snap?.ipAddress?.isNotEmpty == true ? snap!.ipAddress! : 'Chưa rõ',

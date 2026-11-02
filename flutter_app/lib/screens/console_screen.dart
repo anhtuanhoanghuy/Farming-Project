@@ -224,6 +224,7 @@ class _DeviceInfoCard extends StatelessWidget {
             'Mạng: ${switch (net) {
               'WIFI' => 'Wi-Fi',
               'ETH' => 'Ethernet',
+              '4G' => '4G',
               _ => 'chưa rõ',
             }}',
             style: AppTextStyles.bodySecondary,

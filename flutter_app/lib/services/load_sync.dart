@@ -229,6 +229,12 @@ class LoadSync {
       final loadId = PortIds.loadFeedbackLoadId(input.name);
       final value = input.values.firstOrNull?.value;
       if (loadId == null || !input.valid || value is! bool) continue;
+      final snapshot = _state.snapshot;
+      if (snapshot != null &&
+          (!snapshot.supportsLoad(loadId) ||
+              !snapshot.supportsPort(input.portId))) {
+        continue;
+      }
       final load = _loads.where((item) => item.portId == loadId).firstOrNull;
       if (load != null && _acceptDeviceState(loadId, value, at)) {
         load.setOnFromDevice(value);
@@ -243,7 +249,15 @@ class LoadSync {
     final snapshot = DeviceSnapshot.tryParse(json, receivedAt);
     if (snapshot == null) return;
     _state.applySnapshot(snapshot);
+    for (final load in _loads) {
+      if (!snapshot.supportsLoad(load.portId)) {
+        load.cancelDelay();
+        load.setEnabled(false);
+        load.markUnknown();
+      }
+    }
     for (final item in snapshot.loads) {
+      if (!snapshot.supportsLoad(item.loadId)) continue;
       final load = _controller(item.loadId);
       if (load == null) continue;
       load.applySnapshot(
@@ -273,6 +287,10 @@ class LoadSync {
       case 'LOAD_CHANGED':
         final state = event['state'];
         final loadId = event['load_id'];
+        if (_state.snapshot != null &&
+            !_state.snapshot!.supportsLoad(loadId is String ? loadId : '')) {
+          return;
+        }
         if (state is bool && loadId is String) {
           _recentLoadEvents[loadId] = _RecentLoadEvent(state, receivedAt);
           _controller(loadId)?.setOnFromDevice(state);

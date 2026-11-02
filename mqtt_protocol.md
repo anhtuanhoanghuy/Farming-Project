@@ -4,6 +4,75 @@ Tài liệu này định nghĩa cấu trúc dữ liệu JSON cho toàn bộ 5 to
 
 ---
 
+## Khả năng giao diện mạng
+
+Firmware khai báo `NETWORK_INTERFACE_ETHERNET`, `NETWORK_INTERFACE_WIFI` và
+`NETWORK_INTERFACE_4G` trong `main/defines.h` (1: có hỗ trợ, 0: không hỗ trợ).
+Mặc định là Ethernet + Wi-Fi; Ethernet và 4G không được bật đồng thời.
+
+BLE `prov-status` ở trạng thái `idle` và `done`, MQTT snapshot và telemetry
+đều cung cấp `network_interfaces`, ví dụ thiết bị Wi-Fi + 4G:
+
+```json
+{"network_interfaces":{"ethernet":0,"wifi":1,"4g":1}}
+```
+
+App đọc `prov-status` qua BLE trước khi quét Wi-Fi hoặc hiển thị lựa chọn mạng.
+Chỉ hiện checkbox "Chỉ sử dụng Ethernet" khi `ethernet=1`, hoặc "Chỉ sử dụng 4G"
+khi `4g=1`. Không suy đoán khả năng mạng nếu firmware chưa cung cấp trường này:
+hiện lỗi và cho thử lại. Bỏ chọn checkbox thì trở về cấu hình Wi-Fi.
+
+Payload Ethernet/Wi-Fi giữ nguyên; 4G-only bổ sung `only_use_4g:true`,
+`only_use_ethernet:false`, SSID/password rỗng. Phiên bản này chưa có driver modem:
+firmware từ chối 4G-only với `network_4g_not_implemented`, không lưu cấu hình.
+Thiết bị Wi-Fi + 4G vẫn dùng được Wi-Fi; cờ 4G không tự tạo kết nối hay failover.
+
+MQTT `net_interface` biểu thị kết nối đang hoạt động (`ETH`, `WIFI`, `4G` hoặc
+`NONE`), khác với khả năng phần cứng. App chỉ hiển thị đã kết nối theo dữ liệu
+thực tế, không theo checkbox hoặc cờ hỗ trợ.
+
+## Khả năng cảm biến và tải theo phiên bản phần cứng
+
+Chỉ thay các count trong `ESP32_S3_monitoring_controller/main/defines.h`, rồi build
+và nạp firmware cho từng loại thiết bị:
+
+| Define | Khoảng hợp lệ | Cổng được hỗ trợ |
+|---|---|---|
+| `APP_RS485_INTERFACE_COUNT` | 0..4 | RS1 đến RSn |
+| `APP_ANALOG_4_20MA_INTERFACE_COUNT` | 0..1 | AN1 nếu bằng 1 |
+| `APP_DI_COUNT` | 0..4 | DI1 đến DIn |
+| `APP_DO_COUNT` | 0..4 | DO1 đến DOn |
+
+Count bằng 0 nghĩa là không hỗ trợ. Không sửa các hằng `*_SLOT_COUNT`,
+`APP_LOAD_COUNT` hay `APP_SENSOR_INTERFACE_COUNT`: đây là số slot lưu trữ cố định,
+không phải số cổng được bật. ID và NVM luôn giữ RS1..RS4 ở slot 0..3, AN1 ở slot 4,
+DI1..DI4 ở slot 5..8 và bốn slot tải, kể cả khi một nhóm bị tắt.
+
+MQTT snapshot báo đúng `supported`, `count`, `port_lists` cho từng nhóm. Ví dụ tắt
+4–20 mA:
+
+```json
+{"analog_4_20ma":{"supported":false,"runtime_available":false,"count":0,"port_lists":[]}}
+```
+
+App giữ nút **Current** hiển thị nhưng disable, không tự thêm lại AN1 khi danh sách
+rỗng. RS485/DI và tải cũng chỉ cho cấu hình/điều khiển các cổng được thiết bị báo hỗ
+trợ; chưa nhận snapshot thì không suy đoán cổng mặc định. Đổi thiết bị phải đồng bộ
+capabilities lại. `runtime_available` khác với `supported`: driver analog hiện vẫn
+chưa triển khai, nên bật count=1 không tự tạo driver đọc 4–20 mA.
+
+Khi firmware giảm capabilities, cấu hình cũ vẫn giữ tên/thông số nhưng sensor/tải
+không còn hỗ trợ cùng điều kiện/lịch liên quan được tắt và lưu lại NVM. Bật lại
+capability sau này không tự kích hoạt lại các cấu hình đã tắt. Lệnh MQTT nhắm vào
+cổng không hỗ trợ bị từ chối, không chỉ bị chặn trên giao diện.
+
+BLE kết quả provisioning báo tổng số sensor/tải **được hỗ trợ**, chấp nhận cả 0.
+Các cột dung lượng trong Supabase được cập nhật theo luồng provisioning/claim hiện
+có; chỉ nạp firmware mới không tự cập nhật các cột đó. Danh sách thiết bị ưu tiên
+dung lượng trong snapshot mới nhận (kể cả 0), và chỉ dùng số lưu trong database khi
+chưa có snapshot. Giao diện cấu hình luôn dùng capabilities MQTT của chính thiết
+bị, không dùng các cột này để đoán cổng.
+
 ## 1. Cấu trúc Topic chuẩn
 
 Topic format:

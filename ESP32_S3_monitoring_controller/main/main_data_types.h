@@ -76,8 +76,8 @@ typedef enum {
 /* 5. Sensor ports. Protocol ids: RS1..RS4 = port 0..3, AN1 = port 4, DI1..DI4 = port 5..8. */
 #define APP_PORT_NONE 0xFFU
 #define APP_PORT_RS485_FIRST 0U
-#define APP_PORT_ANALOG_FIRST ((uint8_t)APP_RS485_INTERFACE_COUNT)
-#define APP_PORT_DI_FIRST ((uint8_t)(APP_RS485_INTERFACE_COUNT + APP_ANALOG_4_20MA_INTERFACE_COUNT))
+#define APP_PORT_ANALOG_FIRST ((uint8_t)APP_RS485_SLOT_COUNT)
+#define APP_PORT_DI_FIRST ((uint8_t)(APP_RS485_SLOT_COUNT + APP_ANALOG_SLOT_COUNT))
 
 typedef enum {
     SENSOR_SHT40 = 0,
@@ -113,6 +113,22 @@ static inline uint8_t app_port_index(uint8_t port)
     if (port < APP_PORT_ANALOG_FIRST) return port;
     if (port < APP_PORT_DI_FIRST) return (uint8_t)(port - APP_PORT_ANALOG_FIRST);
     return (uint8_t)(port - APP_PORT_DI_FIRST);
+}
+
+static inline bool app_port_supported(uint8_t port)
+{
+    if (port >= APP_SENSOR_INTERFACE_COUNT) return false;
+    switch (app_port_interface(port)) {
+    case SENSOR_INTERFACE_RS485: return app_port_index(port) < APP_RS485_INTERFACE_COUNT;
+    case SENSOR_INTERFACE_ANALOG_4_20MA:
+        return app_port_index(port) < APP_ANALOG_4_20MA_INTERFACE_COUNT;
+    default: return app_port_index(port) < APP_DI_COUNT;
+    }
+}
+
+static inline bool app_load_supported(uint8_t index)
+{
+    return index < APP_DO_COUNT;
 }
 
 static inline uint8_t app_port_make(sensor_interface_type_t type, uint8_t index)
@@ -227,6 +243,40 @@ typedef struct {
     sensor_port_cfg_t sensor[APP_SENSOR_INTERFACE_COUNT];
     load_cfg_t load[APP_LOAD_COUNT];
 } device_cfg_t;
+
+/* Preserve stored names/settings, but never reactivate absent hardware after a variant change. */
+static inline bool app_device_cfg_apply_capabilities(device_cfg_t *cfg)
+{
+    bool changed = false;
+    for (uint8_t port = 0; port < APP_SENSOR_INTERFACE_COUNT; port++) {
+        if (!app_port_supported(port) && cfg->sensor[port].enabled) {
+            cfg->sensor[port].enabled = false;
+            changed = true;
+        }
+    }
+    for (uint8_t load = 0; load < APP_LOAD_COUNT; load++) {
+        bool supported = app_load_supported(load);
+        if (!supported && cfg->load[load].enabled) {
+            cfg->load[load].enabled = false;
+            changed = true;
+        }
+        for (uint8_t c = 0; c < APP_CONDITIONS_PER_LOAD; c++) {
+            load_condition_cfg_t *condition = &cfg->load[load].condition[c];
+            if (condition->enabled &&
+                (!supported || !app_port_supported(condition->sensor_port))) {
+                condition->enabled = false;
+                changed = true;
+            }
+        }
+        for (uint8_t s = 0; s < APP_SCHEDULERS_PER_LOAD; s++) {
+            if (!supported && cfg->load[load].scheduler[s].enabled) {
+                cfg->load[load].scheduler[s].enabled = false;
+                changed = true;
+            }
+        }
+    }
+    return changed;
+}
 
 typedef enum {
     SENSOR_SAMPLE_ERROR_NONE = 0,

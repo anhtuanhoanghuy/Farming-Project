@@ -27,11 +27,11 @@ esp_err_t app_device_commit(const device_cfg_t *cfg);
 /* Increments on every successful commit; consumers re-read the config when it changes. */
 uint32_t app_device_generation(void);
 
-/* Protocol names: "RS1".."RS4", "AN1", "DI1".."DI4"; NULL / APP_PORT_NONE when unknown. */
+/* Stable protocol names even for stored disabled ports; from_name accepts supported ports only. */
 const char *app_device_port_name(uint8_t port);
 uint8_t app_device_port_from_name(const char *name);
 
-/* "DO1".."DO4" <-> load index 0..3 (APP_PORT_NONE when unknown). */
+/* Stable "DO1".."DO4"; from_name accepts supported loads only (APP_PORT_NONE otherwise). */
 const char *app_device_load_name(uint8_t load_index);
 uint8_t app_device_load_from_name(const char *name);
 

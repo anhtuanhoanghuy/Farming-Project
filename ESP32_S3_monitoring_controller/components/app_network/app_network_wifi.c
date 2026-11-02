@@ -2,6 +2,7 @@
 
 #include <string.h>
 
+#include "defines.h"
 #include "esp_event.h"
 #include "app_log.h"
 #include "esp_random.h"
@@ -118,6 +119,10 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
 
 esp_err_t app_wifi_sta_init(void)
 {
+    if (!NETWORK_INTERFACE_WIFI) {
+        ESP_LOGE(TAG, "Wi-Fi is not supported by this device");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
     if (s_initialized) {
         return ESP_OK;
     }

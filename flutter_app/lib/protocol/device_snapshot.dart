@@ -1,4 +1,5 @@
 import 'port_ids.dart';
+import 'network_interfaces.dart';
 
 bool _bool(Object? value, [bool fallback = false]) =>
     value is bool ? value : fallback;
@@ -257,11 +258,13 @@ class InterfaceCapability {
     this.supported = false,
     this.count = 0,
     this.ports = const [],
+    this.reported = false,
   });
 
   factory InterfaceCapability.fromJson(Object? json) {
     if (json is! Map) return const InterfaceCapability();
     return InterfaceCapability(
+      reported: true,
       supported: _bool(json['supported']),
       count: _int(json['count']),
       ports: [
@@ -275,6 +278,11 @@ class InterfaceCapability {
   final bool supported;
   final int count;
   final List<String> ports;
+  final bool reported;
+
+  List<String> get availablePorts => supported && count > 0
+      ? ports.take(count).toList(growable: false)
+      : const [];
 }
 
 class DeviceCapabilities {
@@ -301,14 +309,18 @@ class DeviceCapabilities {
   final InterfaceCapability loads;
 
   /// Sensor ports the firmware offers (RS485 + analog 4-20 mA + DI); null
-  /// when the snapshot did not report any.
+  /// when capabilities are missing; zero is a valid advertised capacity.
   int? get maxSensorCount {
-    final total = rs485.count + analog.count + digitalInputs.count;
-    return total > 0 ? total : null;
+    if (!rs485.reported || !analog.reported || !digitalInputs.reported) {
+      return null;
+    }
+    return rs485.availablePorts.length +
+        analog.availablePorts.length +
+        digitalInputs.availablePorts.length;
   }
 
   /// Loads (relay outputs) the firmware offers; null when not reported.
-  int? get maxLoadCount => loads.count > 0 ? loads.count : null;
+  int? get maxLoadCount => loads.reported ? loads.availablePorts.length : null;
   InterfaceCapability forInterface(String interfaceType) =>
       switch (interfaceType) {
         PortIds.rs485Type => rs485,
@@ -325,6 +337,7 @@ class DeviceSnapshot {
     this.bootId,
     this.deviceName,
     this.netInterface,
+    this.networkInterfaces,
     this.ssid,
     this.ipAddress,
     this.uptimeMs,
@@ -349,6 +362,12 @@ class DeviceSnapshot {
   /// the phone received it, the anchor of every countdown.
   static DeviceSnapshot? tryParse(Map<dynamic, dynamic> json, DateTime at) {
     if (json['type'] != 'SNAPSHOT' || json['loads'] is! List) return null;
+    final interfaces = json.containsKey('network_interfaces')
+        ? NetworkInterfaces.tryParse(json['network_interfaces'])
+        : null;
+    if (json.containsKey('network_interfaces') && interfaces == null) {
+      return null;
+    }
     final emergency = json['emergency'];
     final interlock = json['interlock'];
     final errors = json['errors'];
@@ -358,6 +377,7 @@ class DeviceSnapshot {
         map is Map && map[key] is num ? (map[key] as num).toInt() : null;
     return DeviceSnapshot(
       receivedAt: at,
+      networkInterfaces: interfaces,
       errorMessages: [
         if (errors is Map && errors['messages'] is List)
           for (final message in errors['messages'] as List)
@@ -406,8 +426,9 @@ class DeviceSnapshot {
   final String? bootId;
   final String? deviceName;
 
-  /// `WIFI` or `ETH`.
+  /// `WIFI`, `ETH` or `4G`.
   final String? netInterface;
+  final NetworkInterfaces? networkInterfaces;
   final String? ssid;
   final String? ipAddress;
   final int? uptimeMs;
@@ -441,12 +462,20 @@ class DeviceSnapshot {
   SensorInput? input(String portId) =>
       inputs.where((s) => s.portId == portId).firstOrNull;
 
-  /// Ports of [interfaceType] the device offers; the standard ones until the
-  /// snapshot lists them.
-  List<String> portsFor(String interfaceType) {
-    final ports = capabilities.forInterface(interfaceType).ports;
-    return ports.isEmpty ? PortIds.defaultPorts(interfaceType) : ports;
+  /// Only ports explicitly offered by this device, including a deliberate zero.
+  List<String> portsFor(String interfaceType) => capabilities
+      .forInterface(interfaceType)
+      .availablePorts
+      .where((port) => PortIds.interfaceTypeOfPort(port) == interfaceType)
+      .toList(growable: false);
+
+  bool supportsPort(String port) {
+    final type = PortIds.interfaceTypeOfPort(port);
+    return type != null && portsFor(type).contains(port);
   }
+
+  bool supportsLoad(String port) =>
+      PortIds.isLoad(port) && capabilities.loads.availablePorts.contains(port);
 
   /// Ports of [interfaceType] that have no sensor yet.
   List<String> freePortsFor(String interfaceType) => [

@@ -214,6 +214,55 @@ void main() {
       expect(state.snapshot!.load('DO1')!.conditions, hasLength(2));
     });
 
+    test(
+      'reduced capabilities clear stale unsupported loads and recover',
+      () async {
+        await sync.attach(deviceId);
+        stream.add(_status(sampleSnapshot()));
+        final removed = LoadController.loads[3];
+        expect(removed.enabled, isTrue);
+        final reduced = sampleSnapshot();
+        final capabilities = reduced['capabilities']! as Map<String, Object?>;
+        capabilities['loads'] = {
+          'supported': true,
+          'count': 2,
+          'port_lists': ['DO1', 'DO2'],
+        };
+        stream.add(_status(reduced));
+        expect(removed.enabled, isFalse);
+        expect(removed.stateKnown, isFalse);
+        expect(removed.delayActive, isFalse);
+        stream.add(
+          _status({
+            'type': 'EVENT',
+            'event': 'LOAD_CHANGED',
+            'load_id': 'DO4',
+            'state': true,
+          }),
+        );
+        expect(removed.stateKnown, isFalse);
+        stream.add(
+          _message(MqttDeviceTopicKind.telemetry, {
+            'input': [
+              {
+                'interface_type': 'di',
+                'port_id': 'DI4',
+                'name': 'DO4_feedback',
+                'valid': true,
+                'values': [
+                  {'name': 'Trạng thái', 'unit': '', 'value': true},
+                ],
+              },
+            ],
+          }),
+        );
+        expect(removed.stateKnown, isFalse);
+        stream.add(_status(sampleSnapshot()));
+        expect(removed.enabled, isTrue);
+        expect(removed.stateKnown, isTrue);
+      },
+    );
+
     test('countdown is anchored at the receive time of the snapshot', () async {
       await sync.attach(deviceId);
       final received = DateTime.now().subtract(const Duration(seconds: 45));

@@ -172,8 +172,8 @@ static void prov_worker(void *arg)
 
         memset(&s_result, 0, sizeof(s_result));
         s_result.status = APP_PROV_STATUS_ERROR;
-        s_result.max_sensor_count = APP_SENSOR_INTERFACE_COUNT;
-        s_result.max_load_count = APP_LOAD_COUNT;
+        s_result.max_sensor_count = APP_SUPPORTED_SENSOR_COUNT;
+        s_result.max_load_count = APP_DO_COUNT;
         s_saved = false;
         s_apply_cb(&s_pending, &s_result);
 
@@ -224,11 +224,27 @@ static esp_err_t prov_config_handler(uint32_t session_id, const uint8_t *inbuf, 
         goto respond;
     }
 
-    /* Exactly the four provisioning fields are accepted. */
+    /* only_use_4g is optional so existing Ethernet/Wi-Fi clients stay compatible. */
     const cJSON *ethernet_only = cJSON_GetObjectItemCaseSensitive(root, "only_use_ethernet");
-    if (!cJSON_IsObject(root) || cJSON_GetArraySize(root) != PROV_CONFIG_FIELD_COUNT ||
-        !cJSON_IsBool(ethernet_only)) {
+    const cJSON *cellular_only = cJSON_GetObjectItemCaseSensitive(root, "only_use_4g");
+    const int expected_fields = PROV_CONFIG_FIELD_COUNT + (cellular_only != NULL ? 1 : 0);
+    if (!cJSON_IsObject(root) || cJSON_GetArraySize(root) != expected_fields ||
+        !cJSON_IsBool(ethernet_only) ||
+        (cellular_only != NULL && !cJSON_IsBool(cellular_only))) {
         error_reason = "invalid_fields";
+        goto respond;
+    }
+    if ((cJSON_IsTrue(ethernet_only) && !NETWORK_INTERFACE_ETHERNET) ||
+        (cJSON_IsTrue(cellular_only) && !NETWORK_INTERFACE_4G) ||
+        (cJSON_IsTrue(ethernet_only) && cJSON_IsTrue(cellular_only)) ||
+        (!cJSON_IsTrue(ethernet_only) && !cJSON_IsTrue(cellular_only) &&
+         !NETWORK_INTERFACE_WIFI)) {
+        error_reason = "unsupported_network_interface";
+        goto respond;
+    }
+    if (cJSON_IsTrue(cellular_only)) {
+        ESP_LOGW(TAG, "4G-only requested but the modem driver is not implemented");
+        error_reason = "network_4g_not_implemented";
         goto respond;
     }
 
@@ -301,9 +317,12 @@ static esp_err_t prov_status_handler(uint32_t session_id, const uint8_t *inbuf, 
     }
 
     if (state == PROV_IDLE) {
-        char body[48];
-        (void)snprintf(body, sizeof(body), "{\"state\":\"idle\",\"device_id\":\"%s\"}",
-                       device_id);
+        char body[160];
+        (void)snprintf(body, sizeof(body),
+                       "{\"state\":\"idle\",\"device_id\":\"%s\","
+                       "\"network_interfaces\":{\"ethernet\":%d,\"wifi\":%d,\"4g\":%d}}",
+                       device_id, NETWORK_INTERFACE_ETHERNET, NETWORK_INTERFACE_WIFI,
+                       NETWORK_INTERFACE_4G);
         return send_json(outbuf, outlen, body);
     }
     if (state == PROV_APPLYING) {
@@ -313,15 +332,17 @@ static esp_err_t prov_status_handler(uint32_t session_id, const uint8_t *inbuf, 
         return send_json(outbuf, outlen, body);
     }
 
-    char body[320];
+    char body[440];
     int length = snprintf(body, sizeof(body),
                           "{\"state\":\"done\",\"status\":\"%s\",\"saved\":%s,"
                           "\"attempts\":%u,\"device_id\":\"%s\","
-                          "\"max_sensor_count\":%u,\"max_load_count\":%u",
+                          "\"max_sensor_count\":%u,\"max_load_count\":%u,"
+                          "\"network_interfaces\":{\"ethernet\":%d,\"wifi\":%d,\"4g\":%d}",
                           status_text(s_result.status), s_saved ? "true" : "false",
                           (unsigned)s_result.attempts, device_id,
                           (unsigned)s_result.max_sensor_count,
-                          (unsigned)s_result.max_load_count);
+                          (unsigned)s_result.max_load_count, NETWORK_INTERFACE_ETHERNET,
+                          NETWORK_INTERFACE_WIFI, NETWORK_INTERFACE_4G);
     if (s_result.code != NULL && length > 0 && (size_t)length < sizeof(body)) {
         length += snprintf(body + length, sizeof(body) - (size_t)length, ",\"code\":\"%s\"",
                            s_result.code);
@@ -416,7 +437,7 @@ static esp_err_t wifi_scan_handler(uint32_t session_id, const uint8_t *inbuf, ss
     if (state_get() != PROV_IDLE) {
         return send_status(outbuf, outlen, "ERROR", "busy");
     }
-    if (!s_scan_enabled) {
+    if (!NETWORK_INTERFACE_WIFI || !s_scan_enabled) {
         return send_status(outbuf, outlen, "ERROR", "wifi_unavailable");
     }
 
