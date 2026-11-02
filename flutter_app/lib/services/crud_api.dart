@@ -195,6 +195,7 @@ class CrudApi {
     final query = _db.from(table);
     switch (operation) {
       case 'SELECT':
+        if (table == 'devices') return _readDevices(match);
         final rows = query.select().match(Map<String, Object>.from(match));
         return _schema[table]!.containsKey('created_at')
             ? rows.order('created_at', ascending: true)
@@ -324,14 +325,35 @@ class CrudApi {
   /// True while CRUD calls are being recorded for the on-screen log.
   static bool get isRecording => _group != null;
 
-  /// Rows of `devices` owned by [ownerId], oldest first.
-  static Future<List<Map<String, dynamic>>> listDevices(String ownerId) =>
-      _send(
-        'SELECT',
-        'devices',
-        match: {'user_id': ownerId},
-        when: 'tải lại danh sách thiết bị',
-      );
+  /// Null [ownerId] reads every device allowed by RLS.
+  static Future<List<Map<String, dynamic>>> listDevices(String? ownerId) {
+    final match = <String, Object?>{'user_id': ?ownerId};
+    if (!isRecording) return _readDevices(match);
+    return _send(
+      'SELECT',
+      'devices',
+      match: match,
+      when: 'tải lại danh sách thiết bị',
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> _readDevices(
+    Map<String, Object?> match,
+  ) async {
+    const pageSize = 500;
+    final result = <Map<String, dynamic>>[];
+    for (var offset = 0; ; offset += pageSize) {
+      final page = await _db
+          .from('devices')
+          .select()
+          .match(Map<String, Object>.from(match))
+          .order('created_at')
+          .order('id')
+          .range(offset, offset + pageSize - 1);
+      result.addAll(page);
+      if (page.length < pageSize) return result;
+    }
+  }
 
   static final _macPattern = RegExp(r'^[0-9a-f]{12}$');
 

@@ -1,12 +1,18 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../core/error_text.dart';
 import '../screens/device_list_screen.dart';
 import '../screens/diagnostics_screen.dart';
 import '../screens/settings_screen.dart';
 import '../services/auth_service.dart';
+import '../services/device_repository.dart';
 import '../services/device_transfer_watcher.dart';
 import '../services/mqtt_session_manager.dart';
 import '../state/developer_access_controller.dart';
+import '../state/admin_access_controller.dart';
 import '../state/device_health.dart';
 import '../state/device_presence.dart';
 import '../theme/app_colors.dart';
@@ -28,6 +34,8 @@ class _MainShellState extends State<MainShell> {
   final _deviceKey = GlobalKey<NavigatorState>();
   final _diagKey = GlobalKey<NavigatorState>();
   final _settingsKey = GlobalKey<NavigatorState>();
+  StreamSubscription<AuthState>? _authSubscription;
+  String? _userId;
 
   @override
   void initState() {
@@ -36,6 +44,19 @@ class _MainShellState extends State<MainShell> {
     // Listen before MQTT connects so the retained presence messages are seen.
     DevicePresence.instance.start();
     DeviceHealth.instance.start();
+    _userId = AuthService.userId;
+    DeveloperAccessController.instance.addListener(_onDeveloperChanged);
+    if (AuthService.isConfigured) {
+      _authSubscription = AuthService.onAuthStateChange.listen((_) {
+        final userId = AuthService.userId;
+        if (userId == _userId) return;
+        _userId = userId;
+        AdminAccessController.instance.reset();
+        DeveloperAccessController.instance.setAccess(false);
+        _closeDevicePages();
+        unawaited(_onAccountChanged(userId));
+      });
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final userId = AuthService.userId;
       if (userId != null) {
@@ -43,6 +64,67 @@ class _MainShellState extends State<MainShell> {
         DeviceTransferWatcher.instance.start(userId);
       }
     });
+  }
+
+  Future<void> _onAccountChanged(String? userId) async {
+    try {
+      DeviceTransferWatcher.instance.stop();
+      await DeviceRepository.instance.endSession();
+      if (userId != null && AuthService.userId == userId) {
+        DeviceTransferWatcher.instance.start(userId);
+        await DeviceRepository.instance.refresh();
+      }
+    } catch (error) {
+      _showError('Không đặt lại được phiên thiết bị', error);
+    }
+  }
+
+  void _onDeveloperChanged() {
+    if (!DeveloperAccessController.instance.hasAccess) {
+      unawaited(_disableAdmin());
+    }
+  }
+
+  void _closeDevicePages() {
+    _deviceKey.currentState?.popUntil((route) => route.isFirst);
+    _diagKey.currentState?.popUntil((route) => route.isFirst);
+  }
+
+  Future<void> _onMqttTap() async {
+    try {
+      final activated = await AdminAccessController.instance.tap();
+      if (!mounted || !activated) return;
+      _closeDevicePages();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Đã bật chế độ quản trị')));
+    } catch (error) {
+      _showError('Không bật được chế độ quản trị', error);
+    }
+  }
+
+  Future<void> _disableAdmin() async {
+    _closeDevicePages();
+    try {
+      await AdminAccessController.instance.deactivate();
+    } catch (error) {
+      _showError('Không tải lại được thiết bị của bạn', error);
+    }
+  }
+
+  void _showError(String message, Object error) {
+    debugPrint('[Admin] $message: $error');
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(userErrorText(message, error))));
+  }
+
+  @override
+  void dispose() {
+    DeveloperAccessController.instance.removeListener(_onDeveloperChanged);
+    _authSubscription?.cancel();
+    super.dispose();
   }
 
   Route<dynamic> _route(RouteSettings settings, Widget home) {
@@ -113,13 +195,20 @@ class _MainShellState extends State<MainShell> {
         listenable: Listenable.merge([
           MqttSessionManager.instance,
           DeveloperAccessController.instance,
+          AdminAccessController.instance,
         ]),
         builder: (context, _) => Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // The connection strip is a developer aid.
             if (DeveloperAccessController.instance.hasAccess)
-              _MqttConnectionStatus(manager: MqttSessionManager.instance),
+              MqttConnectionStatus(
+                manager: MqttSessionManager.instance,
+                adminActive: AdminAccessController.instance.isActive,
+                adminBusy: AdminAccessController.instance.isBusy,
+                onTap: _onMqttTap,
+                onExitAdmin: _disableAdmin,
+              ),
             AppBottomNav(currentIndex: _index, onTap: _onNavTap),
           ],
         ),
@@ -128,10 +217,21 @@ class _MainShellState extends State<MainShell> {
   }
 }
 
-class _MqttConnectionStatus extends StatelessWidget {
-  const _MqttConnectionStatus({required this.manager});
+class MqttConnectionStatus extends StatelessWidget {
+  const MqttConnectionStatus({
+    super.key,
+    required this.manager,
+    required this.onTap,
+    required this.onExitAdmin,
+    this.adminActive = false,
+    this.adminBusy = false,
+  });
 
   final MqttSessionManager manager;
+  final VoidCallback onTap;
+  final VoidCallback onExitAdmin;
+  final bool adminActive;
+  final bool adminBusy;
 
   @override
   Widget build(BuildContext context) {
@@ -172,31 +272,47 @@ class _MqttConnectionStatus extends StatelessWidget {
         Icons.cloud_outlined,
       ),
     };
-    return Container(
-      width: double.infinity,
-      color: color.withValues(alpha: 0.08),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 15, color: color),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.caption.copyWith(color: color),
+    return GestureDetector(
+      key: const ValueKey('mqtt-connection-status'),
+      behavior: HitTestBehavior.opaque,
+      onTap: adminBusy || adminActive ? null : onTap,
+      child: Container(
+        width: double.infinity,
+        color: color.withValues(alpha: 0.08),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Row(
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                adminBusy
+                    ? '$label · Đang xác minh admin...'
+                    : adminActive
+                    ? 'ADMIN · $label'
+                    : label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption.copyWith(color: color),
+              ),
             ),
-          ),
-          if (manager.status == MqttSessionStatus.error ||
-              manager.status == MqttSessionStatus.disconnected)
-            IconButton(
-              onPressed: manager.retry,
-              tooltip: 'Thử kết nối MQTT lại',
-              visualDensity: VisualDensity.compact,
-              icon: Icon(Icons.refresh_rounded, size: 18, color: color),
-            ),
-        ],
+            if (adminActive)
+              IconButton(
+                onPressed: onExitAdmin,
+                tooltip: 'Thoát chế độ quản trị',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.close_rounded, size: 18, color: color),
+              ),
+            if (manager.status == MqttSessionStatus.error ||
+                manager.status == MqttSessionStatus.disconnected)
+              IconButton(
+                onPressed: manager.retry,
+                tooltip: 'Thử kết nối MQTT lại',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.refresh_rounded, size: 18, color: color),
+              ),
+          ],
+        ),
       ),
     );
   }

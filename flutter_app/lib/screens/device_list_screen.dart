@@ -37,10 +37,8 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
 
   /// Pull-to-refresh: reloads the devices with a CRUD `SELECT`, shown in the
   /// CRUD log in developer mode.
-  Future<void> _reload() => CrudApi.run(
-    'Kéo xuống làm mới danh sách thiết bị',
-    _repository.refresh,
-  );
+  Future<void> _reload() =>
+      CrudApi.run('Kéo xuống làm mới danh sách thiết bị', _repository.refresh);
 
   /// Chip from the device's retained presence message (LWT).
   static (String, StatusKind) _presenceChip(bool connected, bool? online) {
@@ -72,7 +70,9 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
           leadingIcon: Icons.developer_board,
           embedInTab: widget.inShell,
           navIndex: widget.inShell ? null : 0,
-          onNavTap: widget.inShell ? null : (i) => AppRoutes.openTab(context, i),
+          onNavTap: widget.inShell
+              ? null
+              : (i) => AppRoutes.openTab(context, i),
           body: RefreshIndicator(
             onRefresh: _reload,
             child: SingleChildScrollView(
@@ -82,7 +82,9 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${devices.length} thiết bị',
+                    _repository.isAdminMode
+                        ? '${devices.length} thiết bị · Tất cả tài khoản'
+                        : '${devices.length} thiết bị',
                     style: AppTextStyles.heading,
                   ),
                   const SizedBox(height: 16),
@@ -145,7 +147,9 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                         return _DeviceCard(
                           name: devices[i].name,
                           network: devices[i].macAddress,
-                          detail: _detail(devices[i]),
+                          detail: _repository.isAdminMode
+                              ? '${_detail(devices[i])}\nChủ sở hữu: ${devices[i].userId}'
+                              : _detail(devices[i]),
                           chipLabel: label,
                           kind: kind,
                           // The "!" is for a device that is online and reports

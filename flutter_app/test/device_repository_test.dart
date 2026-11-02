@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_app/models/device_record.dart';
 import 'package:flutter_app/services/device_repository.dart';
+import 'package:flutter_app/state/developer_access_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Map<String, Object?> _row(String mac, {String? name}) => {
   'id': '123e4567-e89b-12d3-a456-4266141740${mac.substring(0, 2)}',
@@ -15,6 +18,7 @@ Map<String, Object?> _row(String mac, {String? name}) => {
 };
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late Map<String, String> cache;
   late List<List<DeviceRecord>> synced;
 
@@ -30,6 +34,12 @@ void main() {
   );
 
   setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    final previousAccess = DeveloperAccessController.instance.hasAccess;
+    DeveloperAccessController.instance.setAccess(true);
+    addTearDown(
+      () => DeveloperAccessController.instance.setAccess(previousAccess),
+    );
     cache = {};
     synced = [];
   });
@@ -65,9 +75,7 @@ void main() {
     await repo.refresh();
     fail = true;
 
-    final reloaded = build(
-      fetch: (_) async => throw StateError('offline'),
-    );
+    final reloaded = build(fetch: (_) async => throw StateError('offline'));
     await reloaded.refresh();
     await pumpEventQueue();
 
@@ -106,19 +114,126 @@ void main() {
     expect(repo.error, contains('đăng nhập'));
   });
 
-  test('concurrent refreshes share one request and clear resets state', () async {
-    var calls = 0;
-    final repo = build(
-      fetch: (_) async {
-        calls++;
-        return [_row('aabbccddeeff')];
-      },
-    );
-    await Future.wait([repo.refresh(), repo.refresh()]);
-    expect(calls, 1);
+  test(
+    'concurrent refreshes share one request and clear resets state',
+    () async {
+      var calls = 0;
+      final repo = build(
+        fetch: (_) async {
+          calls++;
+          return [_row('aabbccddeeff')];
+        },
+      );
+      await Future.wait([repo.refresh(), repo.refresh()]);
+      expect(calls, 1);
 
-    repo.clear();
-    expect(repo.devices, isEmpty);
-    expect(repo.hasLoaded, isFalse);
+      repo.clear();
+      expect(repo.devices, isEmpty);
+      expect(repo.hasLoaded, isFalse);
+    },
+  );
+
+  DeviceRepository adminRepository({
+    Future<List<Map<String, Object?>>> Function()? allRows,
+    DeviceRowsFetcher? ownRows,
+  }) => DeviceRepository(
+    fetchRows: ownRows ?? (_) async => [_row('aabbccddeeff')],
+    fetchAllRows:
+        allRows ??
+        () async => [
+          _row('aabbccddeeff'),
+          {..._row('112233445566'), 'user_id': 'other-owner'},
+        ],
+    readCache: (user) async => cache[user],
+    writeCache: (user, json) async => cache[user] = json,
+    syncMqtt: (user, devices) async => synced.add(devices),
+    resetMqtt: () async {},
+    currentUserId: () => 'u1',
+  );
+
+  test(
+    'admin loads all owners without polluting the owned-device cache',
+    () async {
+      final repo = adminRepository();
+      await repo.refresh();
+      final ownCache = cache['u1'];
+      await repo.setAdminMode(true);
+      expect(repo.isAdminMode, isTrue);
+      expect(repo.devices.map((d) => d.userId), ['u1', 'other-owner']);
+      expect(synced.last.map((d) => d.userId), ['u1', 'other-owner']);
+      expect(cache['u1'], ownCache);
+      await repo.setAdminMode(false);
+      expect(repo.isAdminMode, isFalse);
+      expect(repo.devices.single.userId, 'u1');
+      expect(synced.last, hasLength(1));
+    },
+  );
+
+  test(
+    'admin failures are explicit and never fall back to the owner cache',
+    () async {
+      final repo = adminRepository(
+        allRows: () async => throw StateError('offline'),
+      );
+      await repo.refresh();
+      await expectLater(repo.setAdminMode(true), throwsStateError);
+      expect(repo.devices, isEmpty);
+      expect(repo.error, contains('offline'));
+      expect(synced, hasLength(1));
+    },
+  );
+
+  test(
+    'an admin row without an owner is not routed as the signed-in user',
+    () async {
+      final repo = adminRepository(
+        allRows: () async => [
+          {..._row('112233445566'), 'user_id': null},
+        ],
+      );
+      await expectLater(repo.setAdminMode(true), throwsStateError);
+      expect(repo.devices, isEmpty);
+      expect(synced, isEmpty);
+    },
+  );
+
+  test(
+    'clear prevents an in-flight response from restoring data or MQTT',
+    () async {
+      final response = Completer<List<Map<String, Object?>>>();
+      final repo = adminRepository(ownRows: (_) => response.future);
+      final refresh = repo.refresh();
+      repo.clear();
+      response.complete([_row('aabbccddeeff')]);
+      await refresh;
+      expect(repo.devices, isEmpty);
+      expect(cache, isEmpty);
+      expect(synced, isEmpty);
+      expect(repo.hasLoaded, isFalse);
+    },
+  );
+
+  test('disabling during an admin fetch discards foreign devices', () async {
+    final response = Completer<List<Map<String, Object?>>>();
+    final repo = adminRepository(allRows: () => response.future);
+    final activation = repo.setAdminMode(true);
+    await pumpEventQueue();
+    final deactivation = repo.setAdminMode(false);
+    response.complete([
+      {..._row('112233445566'), 'user_id': 'other-owner'},
+    ]);
+    await Future.wait([activation, deactivation]);
+    expect(repo.isAdminMode, isFalse);
+    expect(repo.devices.single.userId, 'u1');
+    expect(synced, hasLength(1));
+    expect(synced.single.single.userId, 'u1');
+  });
+
+  test('device ownership survives serialization', () {
+    final device = DeviceRecord.fromJson({
+      ..._row('112233445566'),
+      'user_id': 'other-owner',
+    });
+    expect(DeviceRecord.fromJson(device.toJson()).userId, 'other-owner');
   });
 }

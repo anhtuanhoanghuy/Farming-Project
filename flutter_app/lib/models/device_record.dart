@@ -3,6 +3,7 @@ class DeviceRecord {
     required this.id,
     required this.macAddress,
     required this.name,
+    this.userId,
     this.maxSensorCount,
     this.maxLoadCount,
     this.createdAt,
@@ -21,6 +22,7 @@ class DeviceRecord {
       id: id,
       macAddress: mac,
       name: name is String && name.trim().isNotEmpty ? name : mac,
+      userId: json['user_id'] as String?,
       maxSensorCount: count('max_sensor_count'),
       maxLoadCount: count('max_load_count'),
       createdAt: json['created_at'] as String?,
@@ -30,6 +32,7 @@ class DeviceRecord {
   final String id;
   final String macAddress;
   final String name;
+  final String? userId;
 
   /// Null when the device did not report its capabilities while provisioning.
   final int? maxSensorCount;
@@ -40,6 +43,7 @@ class DeviceRecord {
     'id': id,
     'mac_address': macAddress,
     'name': name,
+    'user_id': userId,
     'max_sensor_count': maxSensorCount,
     'max_load_count': maxLoadCount,
     'created_at': createdAt,

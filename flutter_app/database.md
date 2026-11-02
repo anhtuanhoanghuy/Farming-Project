@@ -23,8 +23,36 @@ account, the owner changes to `auth.uid()`. The server then inserts a row in
 notices, removes the device locally (list, MQTT subscription, health log),
 shows "Thiết bị … hiện không còn thuộc tài khoản này" and deletes the notice.
 
-`devices` is read, renamed and deleted by its owner only; the app never inserts
+The normal ownership policies allow `devices` to be read, renamed and deleted
+by its owner only. Admin exceptions are described below; the app never inserts
 into it directly.
+
+## Admin access
+
+The app also supports `public.app_admins(user_id uuid primary key references
+auth.users(id))`. RLS must allow a signed-in user to read their own membership,
+but not grant membership from the client. Admin policies on `devices` must
+allow reading every owner's devices and updating names, according to the
+applied server migration. The existing ownership/claim flow is unchanged.
+
+With developer mode enabled, tap the MQTT connection strip above the bottom
+navigation bar exactly 10 times to verify membership and enable admin mode.
+No time limit is applied to the taps. Until verification succeeds, the app
+queries only the signed-in user's devices. Admin mode is session-only; use
+the strip's close button, disable developer access, or sign out to leave it.
+Signing out or switching accounts also disables the persisted developer mode.
+After signing in again, enable developer mode again before starting a fresh
+10-tap sequence. Revoking developer access also resets any partial sequence.
+
+In admin mode the app reads all pages of devices, uses each row's `user_id`
+for MQTT subscriptions and commands, and never claims the device or changes
+its owner. All-device lists and foreign MQTT device registrations are not
+persisted. Leaving the mode disconnects the session and reloads only owned
+devices, clearing foreign health logs and the session traffic log.
+
+Supabase authorization does not authorize MQTT. The current anonymous broker
+must separately permit these topics; hidden taps only gate the app UI and do
+not prevent other MQTT clients from accessing an unrestricted broker.
 
 Known limit: any signed-in user who knows a MAC can call `claim_device`. A
 one-time claim token issued by the ESP32 (or checked by the backend) is needed

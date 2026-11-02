@@ -5,7 +5,7 @@ import '../navigation/app_routes.dart';
 import '../services/auth_service.dart';
 import '../services/device_repository.dart';
 import '../services/device_transfer_watcher.dart';
-import '../services/mqtt_session_manager.dart';
+import '../state/admin_access_controller.dart';
 import '../state/developer_access_controller.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
@@ -90,12 +90,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _signOut() async {
     final navigator = Navigator.of(context, rootNavigator: true);
+    AdminAccessController.instance.reset();
+    DeveloperAccessController.instance.setAccess(false);
+    _versionTapCount = 0;
     try {
-      await MqttSessionManager.instance.stop();
+      await DeviceRepository.instance.endSession();
     } catch (error) {
       debugPrint('[MQTT] Disconnect khi đăng xuất thất bại: $error');
     }
-    DeviceRepository.instance.clear();
     DeviceTransferWatcher.instance.stop();
     try {
       await AuthService.signOut();

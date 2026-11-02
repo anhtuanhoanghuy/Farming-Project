@@ -52,9 +52,13 @@ class MqttSessionManager extends ChangeNotifier {
   MqttSessionManager.test({
     required Set<String> devices,
     required MqttTestPublisher publisher,
+    String userId = 'test-user',
+    Map<String, String> deviceOwners = const {},
   }) : _testPublisher = publisher,
+       _userId = userId,
        _status = MqttSessionStatus.connected {
     _deviceIds.addAll(devices);
+    _deviceOwners.addAll(deviceOwners);
   }
 
   static final instance = MqttSessionManager._();
@@ -67,6 +71,7 @@ class MqttSessionManager extends ChangeNotifier {
   final _messages = StreamController<MqttDeviceMessage>.broadcast();
   final Set<String> _deviceIds = {};
   final Map<String, String> _deviceNames = {};
+  final Map<String, String> _deviceOwners = {};
   final Set<String> _subscribedTopics = {};
   final Map<String, Completer<MqttAck>> _pendingAcks = {};
   final Map<String, MqttDeviceMessage> _latestSnapshots = {};
@@ -85,6 +90,19 @@ class MqttSessionManager extends ChangeNotifier {
   MqttSessionStatus get status => _status;
   bool get isConnected => _status == MqttSessionStatus.connected;
   String deviceName(String deviceId) => _deviceNames[deviceId] ?? deviceId;
+  String? ownerUserId(String deviceId) => _deviceIds.contains(deviceId)
+      ? (_deviceOwners[deviceId] ?? _userId)
+      : null;
+
+  MqttDeviceTopics topicsForDevice(String deviceId) {
+    final owner = ownerUserId(deviceId);
+    if (owner == null) {
+      throw const MqttCommandException(
+        'Thiết bị chưa được đăng ký trong phiên MQTT.',
+      );
+    }
+    return MqttDeviceTopics.forDevice(userId: owner, deviceId: deviceId);
+  }
 
   Future<void> startForUser(String userId) async {
     final normalizedUserId = userId.trim();
@@ -98,24 +116,31 @@ class MqttSessionManager extends ChangeNotifier {
       return;
     }
 
+    final sameUser = _userId == normalizedUserId;
     final generation = ++_generation;
     await _disconnectClient();
     if (generation != _generation) return;
     _userId = normalizedUserId;
-    _deviceIds.clear();
-    _deviceNames.clear();
+    if (!sameUser) {
+      _deviceIds.clear();
+      _deviceNames.clear();
+      _deviceOwners.clear();
+    }
     _setStatus(MqttSessionStatus.connecting);
     try {
       final preferences = await SharedPreferences.getInstance();
       if (generation != _generation) return;
-      _deviceIds.addAll(
-        preferences.getStringList(_devicePreferenceKey(normalizedUserId)) ?? [],
-      );
-      for (final deviceId in _deviceIds) {
-        final name = preferences.getString(
-          _deviceNamePreferenceKey(normalizedUserId, deviceId),
+      if (!sameUser) {
+        _deviceIds.addAll(
+          preferences.getStringList(_devicePreferenceKey(normalizedUserId)) ??
+              [],
         );
-        if (name != null && name.isNotEmpty) _deviceNames[deviceId] = name;
+        for (final deviceId in _deviceIds) {
+          final name = preferences.getString(
+            _deviceNamePreferenceKey(normalizedUserId, deviceId),
+          );
+          if (name != null && name.isNotEmpty) _deviceNames[deviceId] = name;
+        }
       }
 
       if (!AppConfig.isMqttConfigured) {
@@ -176,7 +201,11 @@ class MqttSessionManager extends ChangeNotifier {
     }
   }
 
-  Future<void> addDevice(String deviceId, {String? name}) async {
+  Future<void> addDevice(
+    String deviceId, {
+    String? name,
+    String? ownerUserId,
+  }) async {
     final id = deviceId.trim();
     if (id.isEmpty) {
       throw ArgumentError.value(deviceId, 'deviceId', 'Must not be empty');
@@ -185,50 +214,71 @@ class MqttSessionManager extends ChangeNotifier {
     if (userId == null) {
       throw StateError('Chưa khởi tạo phiên MQTT cho người dùng.');
     }
-    MqttDeviceTopics.forDevice(userId: userId, deviceId: id);
+    final owner = ownerUserId ?? userId;
+    MqttDeviceTopics.forDevice(userId: owner, deviceId: id);
+    final generation = _generation;
     final preferences = await SharedPreferences.getInstance();
+    if (generation != _generation) return;
+    final oldOwner = this.ownerUserId(id);
+    final changedOwner = oldOwner != null && oldOwner != owner;
+    if (changedOwner) {
+      _unsubscribeDevice(id);
+      _latestSnapshots.remove(id);
+    }
     final isNewDevice = _deviceIds.add(id);
-    if (isNewDevice) {
+    _deviceOwners[id] = owner;
+    if (isNewDevice || changedOwner) {
       await preferences.setStringList(
         _devicePreferenceKey(userId),
-        _deviceIds.toList()..sort(),
+        _ownDeviceIds,
       );
     }
     final normalizedName = name?.trim();
     if (normalizedName != null && normalizedName.isNotEmpty) {
       _deviceNames[id] = normalizedName;
-      await preferences.setString(
-        _deviceNamePreferenceKey(userId, id),
-        normalizedName,
-      );
+      if (owner == userId) {
+        await preferences.setString(
+          _deviceNamePreferenceKey(userId, id),
+          normalizedName,
+        );
+      }
     }
-    if (isConnected && isNewDevice) _subscribeDevice(id);
+    if (generation != _generation) return;
+    if (isConnected && (isNewDevice || changedOwner)) _subscribeDevice(id);
     notifyListeners();
   }
 
   Future<void> removeDevice(String deviceId) async {
     final userId = _userId;
-    if (userId == null || !_deviceIds.remove(deviceId)) return;
+    if (userId == null || !_deviceIds.contains(deviceId)) return;
+    _unsubscribeDevice(deviceId);
+    _deviceIds.remove(deviceId);
+    _deviceOwners.remove(deviceId);
     _deviceNames.remove(deviceId);
-    final topics = MqttDeviceTopics.forDevice(
-      userId: userId,
-      deviceId: deviceId,
-    );
-    final client = _client;
     _latestSnapshots.remove(deviceId);
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setStringList(
+      _devicePreferenceKey(userId),
+      _ownDeviceIds,
+    );
+    await preferences.remove(_deviceNamePreferenceKey(userId, deviceId));
+    notifyListeners();
+  }
+
+  List<String> get _ownDeviceIds => [
+    for (final id in _deviceIds)
+      if (ownerUserId(id) == _userId) id,
+  ]..sort();
+
+  void _unsubscribeDevice(String deviceId) {
+    final topics = topicsForDevice(deviceId);
+    final client = _client;
     for (final topic in topics.subscriptions) {
       if (_subscribedTopics.remove(topic) &&
           client?.connectionStatus?.state == MqttConnectionState.connected) {
         client!.unsubscribe(topic);
       }
     }
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setStringList(
-      _devicePreferenceKey(userId),
-      _deviceIds.toList()..sort(),
-    );
-    await preferences.remove(_deviceNamePreferenceKey(userId, deviceId));
-    notifyListeners();
   }
 
   /// Publishes [payload] on `commands` without waiting for the ACK.
@@ -325,8 +375,9 @@ class MqttSessionManager extends ChangeNotifier {
   Future<void> _publish(String deviceId, Map<String, Object?> payload) async {
     final testPublisher = _testPublisher;
     if (testPublisher != null) {
+      final topic = topicsForDevice(deviceId).commands;
       debugPrint(MqttLog.tx(payload));
-      TrafficLog.instance.addTx(deviceId, 'commands', payload);
+      TrafficLog.instance.addTx(deviceId, topic, payload);
       return testPublisher(deviceId, payload);
     }
     final client = _client;
@@ -341,10 +392,7 @@ class MqttSessionManager extends ChangeNotifier {
         'Thiết bị chưa được đăng ký trong phiên MQTT.',
       );
     }
-    final topic = MqttDeviceTopics.forDevice(
-      userId: userId,
-      deviceId: deviceId,
-    ).commands;
+    final topic = topicsForDevice(deviceId).commands;
     final json = jsonEncode(payload);
     final builder = jsonPayload(json);
     final messageId = client.publishMessage(
@@ -361,10 +409,11 @@ class MqttSessionManager extends ChangeNotifier {
 
   Future<void> stop() async {
     _generation++;
-    await _disconnectClient();
     _userId = null;
     _deviceIds.clear();
     _deviceNames.clear();
+    _deviceOwners.clear();
+    await _disconnectClient();
     _setStatus(MqttSessionStatus.disconnected);
   }
 
@@ -450,10 +499,7 @@ class MqttSessionManager extends ChangeNotifier {
         userId == null) {
       return;
     }
-    final topics = MqttDeviceTopics.forDevice(
-      userId: userId,
-      deviceId: deviceId,
-    );
+    final topics = topicsForDevice(deviceId);
     for (final topic in topics.subscriptions) {
       if (_subscribedTopics.add(topic)) {
         client!.subscribe(
@@ -472,25 +518,33 @@ class MqttSessionManager extends ChangeNotifier {
     final userId = _userId;
     if (userId == null) return;
     for (final received in messages) {
-      final kind = MqttDeviceTopics.kindFromTopic(received.topic);
-      final deviceId = MqttDeviceTopics.deviceIdFromTopic(
-        received.topic,
-        userId: userId,
-      );
-      if (kind == null || deviceId == null || !_deviceIds.contains(deviceId)) {
-        continue;
-      }
       final publish = received.payload as MqttPublishMessage;
-      _dispatch(
-        MqttDeviceMessage(
-          deviceId: deviceId,
-          topic: received.topic,
-          kind: kind,
-          payload: utf8.decode(publish.payload.message, allowMalformed: true),
-          receivedAt: DateTime.now(),
-        ),
+      receiveTopic(
+        received.topic,
+        utf8.decode(publish.payload.message, allowMalformed: true),
       );
     }
+  }
+
+  @visibleForTesting
+  bool receiveTopic(String topic, String payload) {
+    final parts = topic.split('/');
+    if (parts.length != 5) return false;
+    final owner = ownerUserId(parts[3]);
+    if (owner == null) return false;
+    final deviceId = MqttDeviceTopics.deviceIdFromTopic(topic, userId: owner);
+    final kind = MqttDeviceTopics.kindFromTopic(topic);
+    if (deviceId == null || kind == null) return false;
+    _dispatch(
+      MqttDeviceMessage(
+        deviceId: deviceId,
+        topic: topic,
+        kind: kind,
+        payload: payload,
+        receivedAt: DateTime.now(),
+      ),
+    );
+    return true;
   }
 
   void _setStatus(MqttSessionStatus status, {String? error}) {
