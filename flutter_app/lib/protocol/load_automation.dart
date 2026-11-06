@@ -74,7 +74,13 @@ abstract final class LoadAutomation {
 
   /// Inverse of [localToUtc] for showing a stored UTC schedule. [utcDays]
   /// uses 1 = Monday ... 7 = Sunday.
-  static ({Set<int> localDays, int onHour, int onMinute, int offHour, int offMinute})
+  static ({
+    Set<int> localDays,
+    int onHour,
+    int onMinute,
+    int offHour,
+    int offMinute,
+  })
   utcToLocal({
     required List<int> utcDays,
     required String onTime,
@@ -92,7 +98,11 @@ abstract final class LoadAutomation {
     DateTime? firstOn;
     DateTime? firstOff;
     for (final day in utcDays.isEmpty ? const [1] : utcDays) {
-      final date = DateTime.utc(monday.year, monday.month, monday.day + day - 1);
+      final date = DateTime.utc(
+        monday.year,
+        monday.month,
+        monday.day + day - 1,
+      );
       final on = DateTime.utc(
         date.year,
         date.month,

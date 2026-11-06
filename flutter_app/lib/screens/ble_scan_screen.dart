@@ -55,9 +55,7 @@ class _BleScanScreenState extends State<BleScanScreen> {
       setState(() => _connectingId = null);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            userErrorText('Không thể kết nối ${device.name}', e),
-          ),
+          content: Text(userErrorText('Không thể kết nối ${device.name}', e)),
         ),
       );
     }
@@ -124,31 +122,36 @@ class _StatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (IconData icon, String title, String message, bool problem) =
-        switch (scan.status) {
+    final (
+      IconData icon,
+      String title,
+      String message,
+      bool problem,
+    ) = switch (scan.status) {
       BleScanStatus.unsupported => (
-          Icons.bluetooth_disabled,
-          'Thiết bị không hỗ trợ BLE',
-          'Điện thoại này không có Bluetooth Low Energy.',
-          true,
-        ),
+        Icons.bluetooth_disabled,
+        'Thiết bị không hỗ trợ BLE',
+        'Điện thoại này không có Bluetooth Low Energy.',
+        true,
+      ),
       BleScanStatus.bluetoothOff => (
-          Icons.bluetooth_disabled,
-          'Bluetooth đang tắt',
-          'Bật Bluetooth để quét thiết bị.',
-          true,
-        ),
+        Icons.bluetooth_disabled,
+        'Bluetooth đang tắt',
+        'Bật Bluetooth để quét thiết bị.',
+        true,
+      ),
       BleScanStatus.error => (
-          Icons.error_outline,
-          'Không thể quét Bluetooth', 'Kiểm tra quyền Bluetooth/Vị trí rồi thử lại.',
-          true,
-        ),
+        Icons.error_outline,
+        'Không thể quét Bluetooth',
+        'Kiểm tra quyền Bluetooth/Vị trí rồi thử lại.',
+        true,
+      ),
       BleScanStatus.ready => (
-          Icons.bluetooth,
-          scan.scanning ? 'Đang tìm kiếm thiết bị...' : 'Đã dừng quét',
-          'Đặt điện thoại gần bộ điều khiển.',
-          false,
-        ),
+        Icons.bluetooth,
+        scan.scanning ? 'Đang tìm kiếm thiết bị...' : 'Đã dừng quét',
+        'Đặt điện thoại gần bộ điều khiển.',
+        false,
+      ),
     };
 
     return AppCard(

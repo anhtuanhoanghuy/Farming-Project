@@ -87,11 +87,13 @@ class BleScanController extends ChangeNotifier {
       final name = r.advertisementData.advName.isNotEmpty
           ? r.advertisementData.advName
           : r.device.platformName;
-      found.add(ScannedDevice(
-        id: r.device.remoteId.str,
-        name: name.isNotEmpty ? name : 'Thiết bị mới',
-        rssi: r.rssi,
-      ));
+      found.add(
+        ScannedDevice(
+          id: r.device.remoteId.str,
+          name: name.isNotEmpty ? name : 'Thiết bị mới',
+          rssi: r.rssi,
+        ),
+      );
     }
     found.sort((a, b) => b.rssi.compareTo(a.rssi));
     _devices = found;

@@ -25,6 +25,8 @@ class DeveloperAccessController extends ChangeNotifier {
     if (_hasAccess == value) return;
     _hasAccess = value;
     notifyListeners();
-    SharedPreferences.getInstance().then((p) => p.setBool(_key, value)).catchError((_) => false);
+    SharedPreferences.getInstance()
+        .then((p) => p.setBool(_key, value))
+        .catchError((_) => false);
   }
 }

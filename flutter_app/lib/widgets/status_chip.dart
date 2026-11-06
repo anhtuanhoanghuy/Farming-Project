@@ -6,11 +6,7 @@ import '../theme/app_text_styles.dart';
 enum StatusKind { online, degraded, offline, error, valid, enabled, full }
 
 class StatusChip extends StatelessWidget {
-  const StatusChip({
-    super.key,
-    required this.label,
-    required this.kind,
-  });
+  const StatusChip({super.key, required this.label, required this.kind});
 
   final String label;
   final StatusKind kind;
@@ -45,10 +41,7 @@ class StatusChip extends StatelessWidget {
         color: bg,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(
-        label,
-        style: AppTextStyles.chip.copyWith(color: fg),
-      ),
+      child: Text(label, style: AppTextStyles.chip.copyWith(color: fg)),
     );
   }
 }

@@ -5,11 +5,7 @@ import '../theme/app_text_styles.dart';
 
 /// Three-dot header menu styled like the rest of the app.
 class AppMoreMenu<T> extends StatelessWidget {
-  const AppMoreMenu({
-    super.key,
-    required this.itemBuilder,
-    this.onSelected,
-  });
+  const AppMoreMenu({super.key, required this.itemBuilder, this.onSelected});
 
   final PopupMenuItemBuilder<T> itemBuilder;
   final PopupMenuItemSelected<T>? onSelected;

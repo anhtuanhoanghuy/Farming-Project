@@ -57,7 +57,14 @@ class TrafficLog extends ChangeNotifier {
 
   static final instance = TrafficLog();
 
-  static const types = ['Telemetry', 'Command', 'Config', 'ACK', 'Status', 'Event'];
+  static const types = [
+    'Telemetry',
+    'Command',
+    'Config',
+    'ACK',
+    'Status',
+    'Event',
+  ];
 
   /// Commands that change a stored setting rather than the live state.
   static const _liveCommands = {
@@ -177,12 +184,23 @@ class TrafficLog extends ChangeNotifier {
             );
           case 'LWT':
             return ('Status', 'LWT · ${json['state']}');
+          case 'LOGS':
+            final entries = json['entries'];
+            return (
+              'Status',
+              'LOGS · ${entries is List ? entries.length : 0} dòng · '
+                  'next_seq=${json['next_seq']}'
+                  '${json['more'] == true ? ' · còn tiếp' : ''}',
+            );
           case 'EVENT':
             final detail = [
               for (final key in ['load_id', 'state', 'source', 'reason'])
                 if (json[key] != null) '$key=${json[key]}',
             ].join(' ');
-            return ('Event', '${json['event']}${detail.isEmpty ? '' : ' · $detail'}');
+            return (
+              'Event',
+              '${json['event']}${detail.isEmpty ? '' : ' · $detail'}',
+            );
         }
         return ('Status', '${json['type'] ?? 'status'}');
     }

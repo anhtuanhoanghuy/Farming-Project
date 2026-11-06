@@ -545,6 +545,9 @@ void main() {
     });
 
     testWidgets('Console shows the traffic of its device live', (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(
         _wrap(
           const ConsoleScreen(

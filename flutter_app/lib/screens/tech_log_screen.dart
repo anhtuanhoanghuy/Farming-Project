@@ -142,7 +142,10 @@ class _DeviceLogCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Text('device_id: $deviceId', style: AppTextStyles.monoCaption),
+                  Text(
+                    'device_id: $deviceId',
+                    style: AppTextStyles.monoCaption,
+                  ),
                 ],
               ),
             ),
