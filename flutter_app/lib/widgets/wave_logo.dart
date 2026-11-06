@@ -3,11 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
 class WaveLogo extends StatelessWidget {
-  const WaveLogo({
-    super.key,
-    this.size = 28,
-    this.color = AppColors.primary,
-  });
+  const WaveLogo({super.key, this.size = 28, this.color = AppColors.primary});
 
   final double size;
   final Color color;
@@ -17,9 +13,7 @@ class WaveLogo extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size * 0.72,
-      child: CustomPaint(
-        painter: _WavePainter(color),
-      ),
+      child: CustomPaint(painter: _WavePainter(color)),
     );
   }
 }

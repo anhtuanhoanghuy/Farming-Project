@@ -343,7 +343,7 @@ class _DeviceDiagnostics extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                     OutlineAppButton(
-                      label: 'Xem nhật ký kỹ thuật',
+                      label: 'Xem chẩn đoán nâng cao',
                       onPressed: () => Navigator.of(context).pushNamed(
                         AppRoutes.console,
                         arguments: ConsoleArgs(

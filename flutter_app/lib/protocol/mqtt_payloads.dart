@@ -270,6 +270,18 @@ class MqttPayloads {
   static Map<String, Object?> getTelemetry({required String cmdId}) =>
       _command(cmdId, 'GET_TELEMETRY', const {});
 
+  /// Asks the ESP32 to publish a page of its persistent error log as a `LOGS`
+  /// message on the `status` topic, starting at [startSeq].
+  static Map<String, Object?> getLogs({
+    required String cmdId,
+    int startSeq = 0,
+    int limit = 25,
+  }) {
+    _range(startSeq, 0, 0xFFFFFFFF, 'startSeq');
+    _range(limit, 1, 25, 'limit');
+    return _command(cmdId, 'GET_LOGS', {'start_seq': startSeq, 'limit': limit});
+  }
+
   /// Turns every load off, clears each load's delay, conditions and
   /// schedules, and disables all sensors (loads stay enabled). There is no
   /// release command: sensors are enabled one by one afterwards.

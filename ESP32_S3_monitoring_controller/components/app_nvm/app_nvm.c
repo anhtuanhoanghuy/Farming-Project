@@ -501,7 +501,7 @@ void app_nvm_set_default_device_cfg(device_cfg_t *cfg)
     for (size_t index = 0; index < APP_LOAD_COUNT; index++) {
         (void)snprintf(cfg->load[index].name, sizeof(cfg->load[index].name), "Load %u",
                        (unsigned)(index + 1U));
-        cfg->load[index].enabled = app_load_supported((uint8_t)index);
+        cfg->load[index].enabled = false;
         for (size_t c = 0; c < APP_CONDITIONS_PER_LOAD; c++) {
             cfg->load[index].condition[c].sensor_port = APP_PORT_NONE;
         }

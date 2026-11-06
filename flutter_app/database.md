@@ -46,7 +46,21 @@ After signing in again, enable developer mode again before starting a fresh
 
 In admin mode the app reads all pages of devices, uses each row's `user_id`
 for MQTT subscriptions and commands, and never claims the device or changes
-its owner. All-device lists and foreign MQTT device registrations are not
+its owner. The owner is shown as an email through the RPC
+`admin_owner_emails()`; without it the app falls back to the `user_id`:
+
+```sql
+create or replace function public.admin_owner_emails()
+returns table (user_id uuid, email text)
+language sql security definer set search_path = public, auth as $$
+  select u.id, u.email::text from auth.users u
+  where exists (select 1 from public.app_admins a where a.user_id = auth.uid());
+$$;
+revoke all on function public.admin_owner_emails() from public, anon;
+grant execute on function public.admin_owner_emails() to authenticated;
+```
+
+All-device lists and foreign MQTT device registrations are not
 persisted. Leaving the mode disconnects the session and reloads only owned
 devices, clearing foreign health logs and the session traffic log.
 

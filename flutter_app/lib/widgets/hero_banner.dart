@@ -51,7 +51,9 @@ class _HeroBannerState extends State<HeroBanner> {
         duration: const Duration(milliseconds: 450),
         curve: Curves.easeInOut,
       );
-      if (nextPage == _banners.length && mounted && _pageController.hasClients) {
+      if (nextPage == _banners.length &&
+          mounted &&
+          _pageController.hasClients) {
         _pageController.jumpToPage(0);
       }
     });
@@ -76,9 +78,8 @@ class _HeroBannerState extends State<HeroBanner> {
             itemCount: _banners.length + 1,
             onPageChanged: (page) =>
                 setState(() => _currentPage = page % _banners.length),
-            itemBuilder: (context, index) => _BannerCard(
-              content: _banners[index % _banners.length],
-            ),
+            itemBuilder: (context, index) =>
+                _BannerCard(content: _banners[index % _banners.length]),
           ),
         ),
       ],

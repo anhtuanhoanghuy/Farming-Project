@@ -65,6 +65,12 @@ class DeviceRepository extends ChangeNotifier {
 
   bool get isAdminMode => _adminMode;
 
+  Map<String, String> _ownerEmails = const {};
+
+  /// Owner's email in admin mode; falls back to the `user_id`.
+  String ownerLabel(String? userId) =>
+      (userId == null ? null : _ownerEmails[userId]) ?? userId ?? '—';
+
   List<DeviceRecord> get devices => _devices;
   bool get isLoading => _loading;
 
@@ -138,6 +144,7 @@ class DeviceRepository extends ChangeNotifier {
     _inFlight = null;
     _adminMode = false;
     _changingMode = false;
+    _ownerEmails = const {};
     _devices = const [];
     _loading = false;
     _hasLoaded = false;
@@ -200,6 +207,15 @@ class DeviceRepository extends ChangeNotifier {
         } on FormatException catch (e) {
           if (adminMode) rethrow;
           debugPrint('[Devices] Bỏ qua dòng không hợp lệ: ${e.message}');
+        }
+      }
+      if (adminMode) {
+        try {
+          final emails = await CrudApi.ownerEmails();
+          if (!isCurrent()) return;
+          _ownerEmails = emails;
+        } catch (e) {
+          debugPrint('[Devices] Không lấy được email chủ sở hữu: $e');
         }
       }
       _devices = parsed;

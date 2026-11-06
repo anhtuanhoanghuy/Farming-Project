@@ -355,6 +355,24 @@ class CrudApi {
     }
   }
 
+  /// Maps `user_id` to Gmail/email through the admin-only RPC
+  /// `admin_owner_emails()` (returns rows `user_id`, `email`).
+  static Future<Map<String, String>> ownerEmails() async {
+    final rows = await _db.rpc('admin_owner_emails');
+    final result = <String, String>{};
+    if (rows is List) {
+      for (final row in rows) {
+        if (row is! Map) continue;
+        final id = row['user_id'];
+        final email = row['email'];
+        if (id is String && email is String && email.isNotEmpty) {
+          result[id] = email;
+        }
+      }
+    }
+    return result;
+  }
+
   static final _macPattern = RegExp(r'^[0-9a-f]{12}$');
 
   @visibleForTesting

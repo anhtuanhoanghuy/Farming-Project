@@ -151,7 +151,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                           name: devices[i].name,
                           network: devices[i].macAddress,
                           detail: _repository.isAdminMode
-                              ? '${_detail(devices[i])}\nChủ sở hữu: ${devices[i].userId}'
+                              ? '${_detail(devices[i])}\nChủ sở hữu: ${_repository.ownerLabel(devices[i].userId)}'
                               : _detail(devices[i]),
                           chipLabel: label,
                           kind: kind,

@@ -34,13 +34,15 @@ abstract final class MqttLog {
             'buffered=${decoded['buffered']}';
       case MqttDeviceTopicKind.status:
         return switch (decoded['type']) {
-          'SNAPSHOT' => '$prefix RX snapshot device=$deviceId '
-              'boot_id=${decoded['boot_id']} ts=${decoded['ts']} '
-              'loads=${_count(decoded['loads'])} '
-              'inputs=${_count(decoded['input'])} '
-              'emergency=${_emergency(decoded)}',
-          'LWT' => '$prefix RX status LWT device=$deviceId '
-              'state=${decoded['state']} boot_id=${decoded['boot_id']}',
+          'SNAPSHOT' =>
+            '$prefix RX snapshot device=$deviceId '
+                'boot_id=${decoded['boot_id']} ts=${decoded['ts']} '
+                'loads=${_count(decoded['loads'])} '
+                'inputs=${_count(decoded['input'])} '
+                'emergency=${_emergency(decoded)}',
+          'LWT' =>
+            '$prefix RX status LWT device=$deviceId '
+                'state=${decoded['state']} boot_id=${decoded['boot_id']}',
           'EVENT' => '$prefix RX event device=$deviceId payload=$payload',
           _ => '$prefix RX status device=$deviceId payload=$payload',
         };

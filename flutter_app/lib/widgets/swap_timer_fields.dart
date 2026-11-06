@@ -102,10 +102,8 @@ class _SwapTimerFieldsState extends State<SwapTimerFields>
           child: Center(
             child: AnimatedBuilder(
               animation: _curve,
-              builder: (context, child) => Transform.rotate(
-                angle: _curve.value * math.pi,
-                child: child,
-              ),
+              builder: (context, child) =>
+                  Transform.rotate(angle: _curve.value * math.pi, child: child),
               child: _SwapButton(onTap: _swap),
             ),
           ),

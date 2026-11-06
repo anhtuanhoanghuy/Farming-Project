@@ -12,6 +12,7 @@ import '../widgets/app_card.dart';
 import '../widgets/screen_scaffold.dart';
 import '../widgets/status_chip.dart';
 import 'diagnostics_screen.dart' show presenceChip;
+import 'error_log_tab.dart';
 
 class ConsoleArgs {
   const ConsoleArgs({required this.name, required this.deviceId});
@@ -40,6 +41,10 @@ class _ConsoleScreenState extends State<ConsoleScreen> {
   bool _autoScroll = true;
   int? _selectedId;
   int _lastCount = 0;
+
+  /// 0 = Console realtime (default), 1 = Nhật ký lỗi.
+  int _tab = 0;
+  bool _errorTabOpened = false;
 
   /// The entries as they were when "Tạm dừng" was pressed; null while live.
   List<TrafficEntry>? _frozen;
@@ -106,83 +111,157 @@ class _ConsoleScreenState extends State<ConsoleScreen> {
     });
   }
 
+  void _selectTab(int tab) {
+    setState(() {
+      _tab = tab;
+      if (tab == 1) _errorTabOpened = true;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return ScreenScaffold(
-      title: 'Console realtime',
+      title: 'Chẩn đoán nâng cao',
       showBack: true,
       embedInTab: widget.inShell,
       navIndex: widget.inShell ? null : 1,
       onNavTap: widget.inShell ? null : (i) => AppRoutes.openTab(context, i),
-      body: ListenableBuilder(
-        listenable: Listenable.merge([
-          _log,
-          DevicePresence.instance,
-          MqttSessionManager.instance,
-          DeviceState.instance,
-        ]),
-        builder: (context, _) {
-          final visible = _visible();
-          _followNewest(visible.length);
-          final selected = visible
-              .where((e) => e.id == _selectedId)
-              .firstOrNull;
-          return SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: _LogTabs(selected: _tab, onSelect: _selectTab),
+          ),
+          Expanded(
+            child: IndexedStack(
+              index: _tab,
               children: [
-                _DeviceInfoCard(name: _name, deviceId: _deviceId),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _TagChip(
-                      label: 'Tất cả',
-                      selected: _activeFilters.isEmpty,
-                      onTap: () => setState(_activeFilters.clear),
-                    ),
-                    for (final tag in TrafficLog.types)
-                      _TagChip(
-                        label: tag,
-                        selected: _activeFilters.contains(tag),
-                        onTap: () => _toggleFilter(tag),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _Toolbar(
-                  paused: _frozen != null,
-                  autoScroll: _autoScroll,
-                  onPause: _togglePause,
-                  onClear: _clear,
-                  onAutoScroll: () =>
-                      setState(() => _autoScroll = !_autoScroll),
-                ),
-                const SizedBox(height: 12),
-                _ConsolePanel(
-                  entries: visible,
-                  selected: selected,
-                  controller: _scroll,
-                  paused: _frozen != null,
-                  onSelect: (e) => setState(() => _selectedId = e.id),
-                ),
-                if (selected != null) ...[
-                  const SizedBox(height: 12),
-                  _DetailCard(entry: selected),
-                ],
-                const SizedBox(height: 12),
-                const Text(
-                  'Hiển thị các bản tin MQTT app gửi và nhận trong phiên này '
-                  '(tối đa 600 mục, telemetry giữ 120 mục gần nhất)',
-                  style: AppTextStyles.bodySecondary,
-                ),
+                _consoleTab(),
+                if (_errorTabOpened)
+                  ErrorLogTab(deviceId: _deviceId)
+                else
+                  const SizedBox.shrink(),
               ],
             ),
-          );
-        },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _consoleTab() {
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        _log,
+        DevicePresence.instance,
+        MqttSessionManager.instance,
+        DeviceState.instance,
+      ]),
+      builder: (context, _) {
+        final visible = _visible();
+        _followNewest(visible.length);
+        final selected = visible.where((e) => e.id == _selectedId).firstOrNull;
+        return SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _DeviceInfoCard(name: _name, deviceId: _deviceId),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _TagChip(
+                    label: 'Tất cả',
+                    selected: _activeFilters.isEmpty,
+                    onTap: () => setState(_activeFilters.clear),
+                  ),
+                  for (final tag in TrafficLog.types)
+                    _TagChip(
+                      label: tag,
+                      selected: _activeFilters.contains(tag),
+                      onTap: () => _toggleFilter(tag),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _Toolbar(
+                paused: _frozen != null,
+                autoScroll: _autoScroll,
+                onPause: _togglePause,
+                onClear: _clear,
+                onAutoScroll: () => setState(() => _autoScroll = !_autoScroll),
+              ),
+              const SizedBox(height: 12),
+              _ConsolePanel(
+                entries: visible,
+                selected: selected,
+                controller: _scroll,
+                paused: _frozen != null,
+                onSelect: (e) => setState(() => _selectedId = e.id),
+              ),
+              if (selected != null) ...[
+                const SizedBox(height: 12),
+                _DetailCard(entry: selected),
+              ],
+              const SizedBox(height: 12),
+              const Text(
+                'Hiển thị các bản tin MQTT app gửi và nhận trong phiên này '
+                '(tối đa 600 mục, telemetry giữ 120 mục gần nhất)',
+                style: AppTextStyles.bodySecondary,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LogTabs extends StatelessWidget {
+  const _LogTabs({required this.selected, required this.onSelect});
+
+  final int selected;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = ['MQTT console', 'Nhật ký lỗi'];
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.chipNeutral,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onSelect(i),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: i == selected ? AppColors.primary : null,
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Text(
+                    labels[i],
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: i == selected
+                          ? AppColors.textOnPrimary
+                          : AppColors.chipNeutralText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

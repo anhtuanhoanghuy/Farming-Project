@@ -86,7 +86,9 @@ class _ProvisionSuccessScreenState extends State<ProvisionSuccessScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(userErrorText('Không thể đăng ký thiết bị MQTT', error)),
+            content: Text(
+              userErrorText('Không thể đăng ký thiết bị MQTT', error),
+            ),
           ),
         );
       }
