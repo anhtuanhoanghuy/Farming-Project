@@ -7,6 +7,7 @@
 #include <time.h>
 
 #include "app_device.h"
+#include "app_version.h"
 #include "cJSON.h"
 
 #define JSON_VERSION 1
@@ -19,10 +20,10 @@ static const char *const k_cmd_names[] = {
     "ADD_LOAD_CONDITION", "ADD_LOAD_SCHEDULER", "TOGGLE_LOAD_CONDITION", "TOGGLE_LOAD_SCHEDULER",
     "STOP_LOAD_DELAY", "SENSOR_CONFIG", "DELETE_SENSOR", "TOGGLE_SENSOR_CAPABILITY",
     "SET_DEVICE_NAME", "GET_STATUS", "EMERGENCY_STOP", "SET_TELEMETRY_INTERVAL",
-    "GET_TELEMETRY",
+    "GET_TELEMETRY", "GET_LOGS",
 };
 _Static_assert(sizeof(k_cmd_names) / sizeof(k_cmd_names[0]) ==
-                   (size_t)MQTT_CMD_GET_TELEMETRY + 1U,
+                   (size_t)MQTT_CMD_GET_LOGS + 1U,
                "command name table out of sync");
 
 /* ---- Validators and topics ----------------------------------------------------------------- */
@@ -158,6 +159,16 @@ static bool req_int(parse_ctx_t *c, const char *key, int64_t min, int64_t max, i
     }
     *out = (int64_t)it->valuedouble;
     return true;
+}
+
+static bool opt_int(parse_ctx_t *c, const char *key, int64_t min, int64_t max, int64_t fallback,
+                    int64_t *out)
+{
+    if (item(c, key) == NULL) {
+        *out = fallback;
+        return true;
+    }
+    return req_int(c, key, min, max, out);
 }
 
 static bool req_float(parse_ctx_t *c, const char *key, double min, double max, float *out)
@@ -426,6 +437,14 @@ mqtt_proto_code_t mqtt_proto_parse_command(const char *json, size_t len, mqtt_cm
         ok = req_int(&ctx, "interval_s", 5, 600, &n);
         if (ok) out->telemetry_interval_s = (uint16_t)n;
         break;
+    case MQTT_CMD_GET_LOGS:
+        ok = opt_int(&ctx, "start_seq", 0, UINT32_MAX, 0, &n);
+        if (ok) {
+            out->log_start_seq = (uint32_t)n;
+            ok = opt_int(&ctx, "limit", 1, MQTT_PROTO_LOGS_MAX, MQTT_PROTO_LOGS_MAX, &n);
+            out->log_limit = (uint8_t)n;
+        }
+        break;
     }
     if (!ok) result = ctx.code == MQTT_PROTO_OK ? MQTT_PROTO_INVALID_FIELDS : ctx.code;
 
@@ -627,6 +646,7 @@ int mqtt_proto_serialize_snapshot(const mqtt_proto_snapshot_t *s, char *out, siz
     cJSON_AddStringToObject(o, "type", "SNAPSHOT");
     cJSON_AddStringToObject(o, "boot_id", s->boot_id != NULL ? s->boot_id : "00000000");
     cJSON_AddStringToObject(o, "device_name", s->device_name);
+    cJSON_AddStringToObject(o, "firmware_version", APP_FIRMWARE_VERSION);
     cJSON_AddStringToObject(o, "net_interface", s->net_interface != NULL ? s->net_interface : "NONE");
     cJSON *network = cJSON_AddObjectToObject(o, "network_interfaces");
     cJSON_AddNumberToObject(network, "ethernet", NETWORK_INTERFACE_ETHERNET);
@@ -843,6 +863,40 @@ int mqtt_proto_serialize_event(const mqtt_event_t *e, const char *boot_id, bool 
         break;
     default:
         break;
+    }
+    return print_bounded(o, out, cap);
+}
+
+int mqtt_proto_serialize_logs(const mqtt_proto_logs_t *logs, char *out, size_t cap)
+{
+    if (logs == NULL || (logs->count > 0U && logs->entries == NULL)) return -1;
+    cJSON *o = new_base();
+    if (o == NULL) return -1;
+    cJSON_AddStringToObject(o, "type", "LOGS");
+    if (logs->boot_id != NULL) cJSON_AddStringToObject(o, "boot_id", logs->boot_id);
+    if (logs->cmd_id != NULL) cJSON_AddStringToObject(o, "cmd_id", logs->cmd_id);
+    cJSON_AddNumberToObject(o, "next_seq", (double)logs->next_seq);
+    cJSON_AddBoolToObject(o, "more", logs->more);
+    cJSON *list = cJSON_AddArrayToObject(o, "entries");
+    if (list == NULL) {
+        cJSON_Delete(o);
+        return -1;
+    }
+    for (size_t i = 0; i < logs->count; i++) {
+        const app_errlog_entry_t *e = &logs->entries[i];
+        cJSON *entry = cJSON_CreateObject();
+        if (entry == NULL) {
+            cJSON_Delete(o);
+            return -1;
+        }
+        cJSON_AddItemToArray(list, entry);
+        const char level[2] = {e->level, '\0'};
+        cJSON_AddNumberToObject(entry, "seq", (double)e->seq);
+        cJSON_AddNumberToObject(entry, "boot", e->boot);
+        cJSON_AddStringToObject(entry, "level", level);
+        cJSON_AddNumberToObject(entry, "uptime_ms", (double)e->uptime_ms);
+        if (e->epoch_s != 0U) cJSON_AddNumberToObject(entry, "ts", (double)e->epoch_s * 1000.0);
+        cJSON_AddStringToObject(entry, "msg", e->text);
     }
     return print_bounded(o, out, cap);
 }

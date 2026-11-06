@@ -450,6 +450,8 @@ void main() {
       expect(find.text('Thiết bị hoạt động bình thường.'), findsOneWidget);
       expect(find.text('Farm Wi-Fi'), findsOneWidget);
       expect(find.text('192.168.1.20'), findsOneWidget);
+      expect(find.text('Phiên bản firmware'), findsOneWidget);
+      expect(find.text('1.0.0'), findsOneWidget);
       expect(find.text('361d7646'), findsOneWidget);
     });
 

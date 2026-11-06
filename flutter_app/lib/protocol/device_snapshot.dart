@@ -336,6 +336,7 @@ class DeviceSnapshot {
     required this.receivedAt,
     this.bootId,
     this.deviceName,
+    this.firmwareVersion,
     this.netInterface,
     this.networkInterfaces,
     this.ssid,
@@ -393,6 +394,9 @@ class DeviceSnapshot {
       deviceName: json['device_name'] is String
           ? json['device_name'] as String
           : null,
+      firmwareVersion: json['firmware_version'] is String
+          ? json['firmware_version'] as String
+          : null,
       netInterface: json['net_interface'] is String
           ? json['net_interface'] as String
           : null,
@@ -426,7 +430,8 @@ class DeviceSnapshot {
   final String? bootId;
   final String? deviceName;
 
-  /// `WIFI`, `ETH` or `4G`.
+  /// Firmware release (`firmware_version`); null for firmware that predates it.
+  final String? firmwareVersion;
   final String? netInterface;
   final NetworkInterfaces? networkInterfaces;
   final String? ssid;

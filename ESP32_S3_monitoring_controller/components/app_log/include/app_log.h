@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 
+#include "app_errlog.h"
 #include "esp_log.h"
 
 #ifdef __cplusplus
@@ -18,11 +19,13 @@ bool app_log_toggle(void);
 }
 #endif
 
-/* Prints only while the user has logging enabled. */
+/* Prints only while the user has logging enabled; hidden warnings still reach the error log. */
 #define PRINT_LOG(level, tag, format, ...)                                  \
     do {                                                                    \
         if (app_log_enabled()) {                                            \
             ESP_LOG_LEVEL(level, tag, format, ##__VA_ARGS__);               \
+        } else if ((level) == ESP_LOG_WARN) {                               \
+            app_errlog_writef(level, tag, format, ##__VA_ARGS__);           \
         }                                                                   \
     } while (0)
 

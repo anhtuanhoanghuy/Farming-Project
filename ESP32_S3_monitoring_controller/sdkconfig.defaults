@@ -17,6 +17,10 @@ CONFIG_ESP_SYSTEM_PANIC_REBOOT=y
 
 CONFIG_ESP_BROWNOUT_DET=y
 
+# Panics and task-watchdog timeouts leave an ELF core dump in the "coredump" partition.
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+
 # BLE provisioning uses NimBLE (the S3 has no classic BT)
 CONFIG_BT_ENABLED=y
 CONFIG_BT_NIMBLE_ENABLED=y

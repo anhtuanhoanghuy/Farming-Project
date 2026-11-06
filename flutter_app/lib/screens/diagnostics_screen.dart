@@ -440,6 +440,12 @@ class _ConnectionCard extends StatelessWidget {
             'IP address',
             snap?.ipAddress?.isNotEmpty == true ? snap!.ipAddress! : 'Chưa rõ',
           ),
+          _InfoRow(
+            'Phiên bản firmware',
+            snap?.firmwareVersion?.isNotEmpty == true
+                ? snap!.firmwareVersion!
+                : 'Chưa rõ',
+          ),
           if (snap?.bootId != null) _InfoRow('Boot Id', snap!.bootId!),
           if (snap?.uptimeMs != null)
             _InfoRow('Thời gian chạy', formatUptime(snap!.uptimeMs!)),

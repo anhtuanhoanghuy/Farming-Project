@@ -34,6 +34,7 @@ Map<String, Object?> sampleSnapshot({
   'type': 'SNAPSHOT',
   'boot_id': '361d7646',
   'device_name': 'Device_01',
+  'firmware_version': '1.0.0',
   'net_interface': 'WIFI',
   'ssid': 'Farm Wi-Fi',
   'ip_address': '192.168.1.20',

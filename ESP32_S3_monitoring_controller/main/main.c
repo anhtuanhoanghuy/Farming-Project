@@ -1,5 +1,6 @@
 #include "esp_attr.h"
 #include "esp_event.h"
+#include "app_errlog.h"
 #include "app_log.h"
 #include "esp_system.h"
 #include "nvs.h"
@@ -304,6 +305,12 @@ static void run_ble_provisioning(void)
 
 void app_main(void)
 {
+    /* First, so that every later start-up warning or error is kept in flash. */
+    esp_err_t errlog_result = app_errlog_init();
+    if (errlog_result != ESP_OK) {
+        ESP_LOGE(TAG, "Persistent error log unavailable: %s", esp_err_to_name(errlog_result));
+    }
+
     create_shared_resources();
     esp_err_t event_loop_result = esp_event_loop_create_default();
     if (event_loop_result != ESP_OK && event_loop_result != ESP_ERR_INVALID_STATE) {

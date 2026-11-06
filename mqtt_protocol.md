@@ -389,6 +389,23 @@ Lệnh này dùng để lập tức tắt mọi cảm biến và tải. Lệnh n
 }
 ```
 
+---
+
+### 2.21. Đọc nhật ký lỗi đã lưu (`GET_LOGS`)
+Yêu cầu ESP32 gửi một trang nhật ký lỗi lưu trong flash (xem mục 6.9). ESP32 trả ACK `ok` rồi publish bản tin `LOGS` (mục 4.3) lên topic `status`. Cả hai tham số đều không bắt buộc:
+* `start_seq`: số thứ tự bắt đầu, mặc định `0` (từ bản ghi cũ nhất còn lưu).
+* `limit`: số dòng tối đa mỗi trang, `1`..`25`, mặc định `25`.
+```json
+{
+  "v": 1,
+  "cmd_id": "",
+  "type": "GET_LOGS",
+  "start_seq": 0,
+  "limit": 25
+}
+```
+Để đọc hết, App gửi lại `GET_LOGS` với `start_seq` = `next_seq` của trang trước cho đến khi `more` = `false`. Để chỉ lấy dòng mới, App lưu `next_seq` cuối cùng và dùng lại ở lần sau.
+
 ## 3. Topic: `ack` (ESP32 ➔ App)
 
 ESP32 phản hồi kết quả thực thi lệnh sau khi xử lý từ `commands`t`. Khi nhận được bản tn ack này tùy vào từng result ok hay error mà app sẽ đồng bộ trạng thái với esp để hiển thị đúng trên giao diện. Nếu là error sẽ hiển thị lỗi và nguyên nhân.
@@ -439,6 +456,7 @@ Bao gồm:
   "type": "SNAPSHOT",
   "boot_id": "361d7646",
   "device_name": "Device_01",
+  "firmware_version": "1.0.0",
   "net_interface": "WIFI",
   "uptime_ms": 3600000,
   "ts": 1791854906000,
@@ -720,6 +738,43 @@ bản tin này được broker tự pubish khi esp mất kết nối mqtt. app �
 }
 ```
 
+### 4.3. LOGS - Retained = 0
+Trả lời `GET_LOGS`, không retained. Các dòng xếp từ cũ đến mới theo `seq`.
+```json
+{
+  "v": 1,
+  "type": "LOGS",
+  "boot_id": "eff06ce4",
+  "cmd_id": "",
+  "next_seq": 1290,
+  "more": true,
+  "entries": [
+    {
+      "seq": 1288,
+      "boot": 41,
+      "level": "I",
+      "uptime_ms": 412,
+      "msg": "boot: start #41, reset=task_wdt"
+    },
+    {
+      "seq": 1289,
+      "boot": 40,
+      "level": "W",
+      "uptime_ms": 7141407,
+      "ts": 1793869286000,
+      "msg": "app_mqtt: ACK tx dropped cmd_id=... (offline), MQTT state=2"
+    }
+  ]
+}
+```
+* **`seq`**: số thứ tự tăng dần, không reset khi khởi động lại.
+* **`boot`**: số lần khởi động của ESP32 khi ghi dòng này (tăng 1 mỗi lần khởi động).
+* **`level`**: `E` (lỗi), `W` (cảnh báo), `I` (mốc khởi động).
+* **`uptime_ms`**: thời gian chạy của lần khởi động `boot` tại thời điểm ghi.
+* **`ts`**: giờ UTC (ms); chỉ có khi ESP32 đã đồng bộ giờ.
+* **`msg`**: `tag: nội dung`, tối đa 104 byte UTF-8 (phần dài hơn bị cắt).
+* **`next_seq`** / **`more`**: dùng để đọc trang tiếp theo (mục 2.21).
+
 ## 5. Topic: `telemetry` (ESP32 ➔ App)
 
 Gửi định kỳ một bản tin telemetry mỗi chu kỳ lấy mẫu, kể cả khi không có cảm biến nào đang bật. Khi đó `input` là mảng rỗng; app vẫn dùng `net_interface` (cùng tên field với bản tin `SNAPSHOT`) để cập nhật trạng thái kết nối mạng. Chỉ các cảm biến đã cấu hình và đang bật mới có mặt trong `input`:
@@ -864,3 +919,10 @@ Khi điều kiện và lịch hẹn cùng bật, điều kiện cảm biến đ�
 ### 6.8. Log
 * ESP32 in log mức INFO cho mọi lệnh: `CMD rx type=... cmd_id=...`, `CMD ok ...` hoặc `CMD err ... code=... reason=...`, và `ACK tx ...`.
 * App ghi log tương ứng: `[MQTT] TX cmd ...`, `[MQTT] RX ack ...`, `[MQTT] RX snapshot ...`.
+
+### 6.9. Nhật ký lỗi lưu trong flash
+* Mọi dòng log mức `W` và `E` (kể cả khi đã tắt in log bằng nhấn đúp nút) được ghi vào phân vùng flash `errlog` (256 KB, khoảng 2.048 dòng, ghi vòng, dòng cũ nhất bị ghi đè theo từng khối 32 dòng). Dữ liệu còn sau khi khởi động lại hoặc mất điện.
+* Mỗi lần khởi động ghi một dòng `boot: start #N, reset=<lý do>`. Nếu lý do là `panic`, `int_wdt`, `task_wdt` hoặc `other_wdt`, ESP32 ghi thêm `crash: task=... pc=...` và các dòng `crash: bt ...` (địa chỉ backtrace, giải mã bằng `xtensa-esp32s3-elf-addr2line` với file ELF cùng bản build). Khi Task WDT kích hoạt còn có dòng `task_wdt: not reset by <task> (CPU n)`.
+* Bản core dump đầy đủ nằm trong phân vùng `coredump`, chỉ đọc được qua USB (`idf.py coredump-info`).
+* Dòng chưa kịp ghi flash (tối đa khoảng 1 giây) giữ trong RTC RAM nên còn sau panic/WDT; mất điện đột ngột thì mất các dòng này.
+* Chống lặp: mỗi vị trí log trong mã chỉ lưu 5 dòng đầu mỗi 10 phút; số dòng bị bỏ được ghi là `[+N skipped]` ở dòng kế tiếp của cùng vị trí đó.

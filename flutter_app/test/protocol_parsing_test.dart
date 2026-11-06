@@ -94,6 +94,7 @@ void main() {
 
     test('device level fields and capabilities', () {
       expect(snapshot.deviceName, 'Device_01');
+      expect(snapshot.firmwareVersion, '1.0.0');
       expect(snapshot.netInterface, 'WIFI');
       expect(snapshot.bootId, '361d7646');
       expect(snapshot.telemetryIntervalSeconds, 5);

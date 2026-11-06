@@ -10,6 +10,7 @@
 #include "app_device.h"
 #include "app_mqtt_cmd.h"
 #include "app_nvm.h"
+#include "app_version.h"
 #include "esp_crt_bundle.h"
 #include "esp_event.h"
 #include "esp_heap_caps.h"
@@ -46,6 +47,8 @@
 #define MQTT_STOP_TIMEOUT_MS 4500U
 #define MQTT_RESET_STOP_MS 250U
 #define MQTT_SUBACK_TIMEOUT_MS 5000U
+/* One esp-mqtt attempt is a TCP connect plus a CONNACK wait, each bounded by the connect timeout. */
+#define MQTT_CONNECTING_TIMEOUT_MS (5U * CONFIG_APP_MQTT_CONNECT_TIMEOUT_MS / 2U)
 #define MQTT_OFFLINE_DEBOUNCE_MS 10000U
 #define MQTT_SNAPSHOT_MIN_GAP_US 300000LL
 #define MQTT_TELEMETRY_INTERVAL_MIN_S 5U
@@ -170,7 +173,6 @@ static char s_pending_net_to[8];
 static char s_device_id[13];
 static char s_device_name[32];
 static char s_boot_id[9];
-static const char s_firmware_version[] = "1.0.0";
 static char s_broker_host[128];
 static uint16_t s_broker_port;
 static char s_lwt_payload[160];
@@ -336,6 +338,7 @@ static void ensure_client_start(void)
     if (s_client_running) {
         if (s_state == MQTT_STATE_WAIT_TIME) {
             s_state = MQTT_STATE_CONNECTING;
+            s_state_since_us = esp_timer_get_time();
             (void)esp_mqtt_client_reconnect(s_client);
         }
         return;
@@ -378,6 +381,8 @@ static void control_request_async(ctrl_kind_t kind, net_interface_t from, net_in
 static void stop_client(bool graceful, const char *reason)
 {
     (void)xTimerStop(s_retry_timer, 0);
+    /* xTimerStop is asynchronous, so a token from an expired timer may already be queued. */
+    (void)xQueueReset(s_retry_queue);
     s_intentional_stop = 1;
     if (s_client_running) {
         if (graceful && (xEventGroupGetBits(g_sys.sys_event_group) & BIT_MQTT_CONNECTED)) {
@@ -419,12 +424,13 @@ static void force_outputs_safe(void)
 
 /* ---- Publishing ---------------------------------------------------------------------------- */
 
-static void publish_status(const char *payload, int length, bool retain)
+static bool publish_status(const char *payload, int length, bool retain)
 {
-    if (s_state != MQTT_STATE_ONLINE || length <= 0 || length > MQTT_PROTO_STATUS_MAX) return;
+    if (s_state != MQTT_STATE_ONLINE || length <= 0 || length > MQTT_PROTO_STATUS_MAX) return false;
     int id = esp_mqtt_client_enqueue(s_client, s_topics.status, payload, length, 1, retain, true);
     if (id < 0) increment(&s_stats.tx_fail);
     else increment(&s_stats.tx_status);
+    return id >= 0;
 }
 
 static void make_snapshot(mqtt_proto_snapshot_t *out)
@@ -481,8 +487,11 @@ static void publish_snapshot(const char *why)
     __atomic_store_n(&s_snapshot_dirty, 0, __ATOMIC_RELAXED);
     s_snapshot_due_us = now + (int64_t)CONFIG_APP_MQTT_SNAPSHOT_PERIOD_S * 1000000LL;
     s_snapshot_min_us = now + MQTT_SNAPSHOT_MIN_GAP_US;
-    publish_status(s_snapshot_payload, n, true);
-    ESP_LOGI(TAG, "SNAPSHOT tx (%s) %d bytes, retained", why, n);
+    if (publish_status(s_snapshot_payload, n, true)) {
+        ESP_LOGI(TAG, "SNAPSHOT queued (%s) %d bytes, retained", why, n);
+    } else {
+        ESP_LOGW(TAG, "SNAPSHOT not queued (%s), MQTT state=%d", why, s_state);
+    }
 }
 
 static void publish_event_value(const mqtt_event_t *src)
@@ -601,8 +610,9 @@ static void publish_ack_value(mqtt_proto_ack_t *ack)
     if (time_valid() && !ack->has_ts) { ack->has_ts = true; ack->ts_ms = current_epoch_ms(); }
     int n = mqtt_proto_serialize_ack(ack, s_boot_id, s_ack_payload, sizeof(s_ack_payload));
     if (n <= 0 || n > MQTT_PROTO_ACK_MAX || s_state != MQTT_STATE_ONLINE) {
-        ESP_LOGW(TAG, "ACK tx dropped cmd_id=%s (%s)", ack->has_cmd_id ? ack->cmd_id : "-",
-                 s_state != MQTT_STATE_ONLINE ? "offline" : "serialize");
+        ESP_LOGW(TAG, "ACK tx dropped cmd_id=%s (%s), MQTT state=%d",
+                 ack->has_cmd_id ? ack->cmd_id : "-",
+                 s_state != MQTT_STATE_ONLINE ? "offline" : "serialize", s_state);
         increment(&s_stats.tx_fail);
         return;
     }
@@ -620,6 +630,36 @@ static void publish_ack_value(mqtt_proto_ack_t *ack)
 }
 
 /* ---- Commands ------------------------------------------------------------------------------ */
+
+static void publish_logs(const mqtt_cmd_t *cmd)
+{
+    app_errlog_entry_t *entries = calloc(cmd->log_limit, sizeof(*entries));
+    if (entries == NULL) {
+        increment(&s_stats.tx_fail);
+        ESP_LOGW(TAG, "LOGS not sent cmd_id=%s: no memory", cmd->cmd_id);
+        return;
+    }
+    mqtt_proto_logs_t logs = {.boot_id = s_boot_id, .cmd_id = cmd->cmd_id, .entries = entries};
+    logs.count = app_errlog_read(cmd->log_start_seq, entries, cmd->log_limit, &logs.next_seq,
+                                 &logs.more);
+    int n;
+    for (;;) {
+        n = mqtt_proto_serialize_logs(&logs, s_snapshot_payload, sizeof(s_snapshot_payload));
+        if (n > 0 || logs.count == 0U) break;
+        /* Escaped text outgrew the status buffer: send fewer lines, the app pages on. */
+        logs.count /= 2U;
+        logs.more = true;
+        logs.next_seq = logs.count > 0U ? entries[logs.count - 1U].seq + 1U : cmd->log_start_seq;
+    }
+    free(entries);
+    if (n <= 0 || !publish_status(s_snapshot_payload, n, false)) {
+        increment(&s_stats.tx_fail);
+        ESP_LOGW(TAG, "LOGS not sent cmd_id=%s, MQTT state=%d", cmd->cmd_id, s_state);
+        return;
+    }
+    ESP_LOGI(TAG, "LOGS queued cmd_id=%s entries=%u next_seq=%lu more=%d", cmd->cmd_id,
+             (unsigned)logs.count, (unsigned long)logs.next_seq, (int)logs.more);
+}
 
 static void reject_message(mqtt_proto_code_t code, const char *cmd_id, const char *cmd_name,
                            const char *reason)
@@ -685,6 +725,8 @@ static void handle_command(const rx_slot_t *slot)
     publish_ack_value(&ack);
     if (ack.success && cmd.type == MQTT_CMD_GET_TELEMETRY) {
         publish_latest_sample();
+    } else if (ack.success && cmd.type == MQTT_CMD_GET_LOGS) {
+        publish_logs(&cmd);
     } else if (ack.success) {
         /* The app mirrors the device from the retained snapshot, so send the new state right away. */
         publish_snapshot(name);
@@ -811,6 +853,7 @@ static void process_signal(const mqtt_signal_t *sig)
         if (s_suback_mask == 1U) {
             ESP_LOGI(TAG, "SUBACK received: MQTT ONLINE (commands)");
             s_state = MQTT_STATE_ONLINE;
+            (void)xTimerStop(s_retry_timer, 0);
             s_online_since_us = esp_timer_get_time();
             __atomic_store_n(&s_stats.online_since_s, (uint32_t)(s_online_since_us / 1000000LL), __ATOMIC_RELAXED);
             s_offline_since_us = 0;
@@ -856,6 +899,7 @@ static void process_signal(const mqtt_signal_t *sig)
         }
         break;
     case SIGNAL_RETRY:
+        if (s_state != MQTT_STATE_BACKOFF && s_state != MQTT_STATE_WAIT_TIME) break;
         if (s_enabled && s_network_ready && !s_shutdown) {
             if (s_tls_mode && !time_valid()) {
                 if (esp_timer_get_time() - s_state_since_us >= (int64_t)CONFIG_APP_MQTT_TLS_TIME_WAIT_S * 1000000LL) {
@@ -869,7 +913,12 @@ static void process_signal(const mqtt_signal_t *sig)
                 }
             } else if (s_client_running) {
                 s_state = MQTT_STATE_CONNECTING;
-                (void)esp_mqtt_client_reconnect(s_client);
+                s_state_since_us = esp_timer_get_time();
+                esp_err_t err = esp_mqtt_client_reconnect(s_client);
+                if (err != ESP_OK) {
+                    ESP_LOGW(TAG, "MQTT reconnect request failed: %s", esp_err_to_name(err));
+                    abort_session("reconnect request failed");
+                }
             } else ensure_client_start();
         }
         break;
@@ -942,6 +991,10 @@ static void check_periodic(void)
     int64_t now = esp_timer_get_time();
     if (s_state == MQTT_STATE_SUBSCRIBING && now - s_state_since_us > MQTT_SUBACK_TIMEOUT_MS * 1000LL) {
         abort_session("SUBACK timeout");
+    }
+    if (s_state == MQTT_STATE_CONNECTING &&
+        now - s_state_since_us > (int64_t)MQTT_CONNECTING_TIMEOUT_MS * 1000LL) {
+        abort_session("CONNECT timeout");
     }
     if (s_state == MQTT_STATE_WAIT_TIME && time_valid()) ensure_client_start();
     if (s_state == MQTT_STATE_WAIT_TIME && now - s_state_since_us > (int64_t)CONFIG_APP_MQTT_TLS_TIME_WAIT_S * 1000000LL) {
@@ -1174,7 +1227,7 @@ esp_err_t app_mqtt_init(const app_config_t *config)
     s_initialized = 1;
     if (!s_tls_mode) ESP_LOGW(TAG, "DEVELOPMENT ONLY: plaintext public broker; do not send private/control data");
     ESP_LOGI(TAG, "broker=%s:%u client_id=%s firmware=%s boot_id=%s", s_broker_host,
-             (unsigned)s_broker_port, s_device_id, s_firmware_version, s_boot_id);
+             (unsigned)s_broker_port, s_device_id, APP_FIRMWARE_VERSION, s_boot_id);
     ESP_LOGI(TAG, "topics: sub=%s | pub=%s %s %s", s_topics.commands, s_topics.ack, s_topics.status,
              s_topics.telemetry);
     return ESP_OK;

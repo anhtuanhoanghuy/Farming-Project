@@ -324,6 +324,7 @@ mqtt_proto_code_t app_mqtt_cmd_execute(const mqtt_cmd_t *cmd, char *reason, size
         return exec_telemetry_interval(cmd, reason, reason_cap);
     case MQTT_CMD_GET_STATUS:
     case MQTT_CMD_GET_TELEMETRY:
+    case MQTT_CMD_GET_LOGS:
         return MQTT_PROTO_OK;
     case MQTT_CMD_EMERGENCY_STOP: {
         uint8_t loads_off = 0;

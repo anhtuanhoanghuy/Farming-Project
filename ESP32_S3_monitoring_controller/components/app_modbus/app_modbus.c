@@ -74,10 +74,17 @@ static void IRAM_ATTR di_button_isr(void *arg)
 static void di_button_task(void *arg)
 {
     (void)arg;
+    esp_err_t wdt_err = esp_task_wdt_add(NULL);
+    if (wdt_err != ESP_OK) {
+        ESP_LOGE(TAG, "di_button_task WDT registration failed: %s", esp_err_to_name(wdt_err));
+        esp_restart();
+    }
+
     bool armed[APP_DI_SLOT_COUNT] = {true};
     const TickType_t debounce_ticks = pdMS_TO_TICKS(DI_BUTTON_DEBOUNCE_MS);
 
     for (;;) {
+        (void)esp_task_wdt_reset();
         for (size_t i = 0; i < APP_DI_COUNT; i++) {
             if (!armed[i] && gpio_get_level(s_di_pins[i]) != 0) {
                 armed[i] = true;

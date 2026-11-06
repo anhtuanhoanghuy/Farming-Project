@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "app_errlog.h"
 #include "main_data_types.h"
 
 #ifdef __cplusplus
@@ -21,6 +22,7 @@ extern "C" {
 #define MQTT_PROTO_EVENT_MAX 1024U
 #define MQTT_PROTO_STATUS_MAX 7168U
 #define MQTT_PROTO_TOPIC_MAX 80U
+#define MQTT_PROTO_LOGS_MAX 25U
 
 /* ACK `code` values. */
 typedef enum {
@@ -62,7 +64,8 @@ typedef enum {
     MQTT_CMD_GET_STATUS,
     MQTT_CMD_EMERGENCY_STOP,
     MQTT_CMD_SET_TELEMETRY_INTERVAL,
-    MQTT_CMD_GET_TELEMETRY
+    MQTT_CMD_GET_TELEMETRY,
+    MQTT_CMD_GET_LOGS
 } mqtt_cmd_type_t;
 
 /* A validated command. Indexes are 0-based (DO1 = 0, CON1 = 0, SHE1 = 0, RS1 = port 0). */
@@ -88,6 +91,8 @@ typedef struct {
     uint16_t off_minute_utc;
     uint8_t slave_id;
     char name[MQTT_PROTO_NAME_LEN];
+    uint32_t log_start_seq;     /* GET_LOGS */
+    uint8_t log_limit;
 } mqtt_cmd_t;
 
 typedef struct {
@@ -159,6 +164,16 @@ typedef struct {
     char status[MQTT_PROTO_TOPIC_MAX];
 } mqtt_proto_topics_t;
 
+/* One page of the persistent error log, answered to GET_LOGS. */
+typedef struct {
+    const char *boot_id;
+    const char *cmd_id;
+    const app_errlog_entry_t *entries;
+    size_t count;
+    uint32_t next_seq;
+    bool more;
+} mqtt_proto_logs_t;
+
 bool mqtt_proto_valid_user_id(const char *user_id);
 bool mqtt_proto_valid_cmd_id(const char *cmd_id);
 bool mqtt_proto_valid_name(const char *name);
@@ -179,6 +194,7 @@ int mqtt_proto_serialize_snapshot(const mqtt_proto_snapshot_t *snapshot, char *o
 int mqtt_proto_serialize_telemetry(const mqtt_proto_telemetry_t *sample, char *out, size_t cap);
 int mqtt_proto_serialize_event(const mqtt_event_t *event, const char *boot_id, bool has_ts,
                                int64_t ts_ms, char *out, size_t cap);
+int mqtt_proto_serialize_logs(const mqtt_proto_logs_t *logs, char *out, size_t cap);
 
 void mqtt_proto_dedupe_init(mqtt_proto_dedupe_t *window);
 const mqtt_proto_ack_t *mqtt_proto_dedupe_find(const mqtt_proto_dedupe_t *window,
