@@ -1,0 +1,9 @@
+menu "Application cellular modem"
+
+config APP_CELLULAR_APN
+    string "Cellular APN"
+    default ""
+    help
+        APN supplied by the SIM/network operator. Leave empty unless required.
+
+endmenu

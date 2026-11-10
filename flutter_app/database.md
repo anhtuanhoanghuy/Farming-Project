@@ -10,9 +10,23 @@
 | `name` | `text` |  |
 | `max_sensor_count` | `int4` | Required · from BLE provisioning result |
 | `max_load_count` | `int4` | Required · from BLE provisioning result |
+| `device_type` | `text` | Required · default `'controller'` · `controller` or `sensor_node` · from BLE provisioning result |
+| `power_source` | `text` | Required · default `'mains'` · `mains`, `battery` or `solar_battery` · from BLE provisioning result |
 | `created_at` | `timestamptz` |  |
 
 ## Ownership transfer
+
+Migration for `device_type` / `power_source` (update `claim_device` to accept
+`p_device_type text default 'controller'` and `p_power_source text default
+'mains'` and write them on insert and on owner change):
+
+```sql
+alter table public.devices
+  add column device_type text not null default 'controller'
+    check (device_type in ('controller', 'sensor_node')),
+  add column power_source text not null default 'mains'
+    check (power_source in ('mains', 'battery', 'solar_battery'));
+```
 
 A device has exactly one owner. After BLE provisioning with the new account's
 `user_id`, the app calls the RPC `claim_device(p_mac_address, p_name,

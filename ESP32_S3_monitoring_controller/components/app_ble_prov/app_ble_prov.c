@@ -5,11 +5,11 @@
 #include <string.h>
 
 #include "app_nvm.h"
+#include "app_network_wifi.h"
 #include "defines.h"
 #include "cJSON.h"
 #include "app_log.h"
 #include "esp_mac.h"
-#include "esp_wifi.h"
 #include "freertos/task.h"
 #include "host/ble_gap.h"
 #include "host/ble_hs.h"
@@ -174,6 +174,8 @@ static void prov_worker(void *arg)
         s_result.status = APP_PROV_STATUS_ERROR;
         s_result.max_sensor_count = APP_SUPPORTED_SENSOR_COUNT;
         s_result.max_load_count = APP_DO_COUNT;
+        s_result.device_type = APP_DEVICE_TYPE_NAME;
+        s_result.power_source = APP_POWER_SOURCE_NAME;
         s_saved = false;
         s_apply_cb(&s_pending, &s_result);
 
@@ -332,16 +334,20 @@ static esp_err_t prov_status_handler(uint32_t session_id, const uint8_t *inbuf, 
         return send_json(outbuf, outlen, body);
     }
 
-    char body[440];
+    char body[520];
     int length = snprintf(body, sizeof(body),
                           "{\"state\":\"done\",\"status\":\"%s\",\"saved\":%s,"
                           "\"attempts\":%u,\"device_id\":\"%s\","
                           "\"max_sensor_count\":%u,\"max_load_count\":%u,"
+                          "\"device_type\":\"%s\",\"power_source\":\"%s\","
                           "\"network_interfaces\":{\"ethernet\":%d,\"wifi\":%d,\"4g\":%d}",
                           status_text(s_result.status), s_saved ? "true" : "false",
                           (unsigned)s_result.attempts, device_id,
                           (unsigned)s_result.max_sensor_count,
-                          (unsigned)s_result.max_load_count, NETWORK_INTERFACE_ETHERNET,
+                          (unsigned)s_result.max_load_count,
+                          s_result.device_type != NULL ? s_result.device_type : APP_DEVICE_TYPE_NAME,
+                          s_result.power_source != NULL ? s_result.power_source : APP_POWER_SOURCE_NAME,
+                          NETWORK_INTERFACE_ETHERNET,
                           NETWORK_INTERFACE_WIFI, NETWORK_INTERFACE_4G);
     if (s_result.code != NULL && length > 0 && (size_t)length < sizeof(body)) {
         length += snprintf(body + length, sizeof(body) - (size_t)length, ",\"code\":\"%s\"",
@@ -373,22 +379,12 @@ static esp_err_t prov_status_handler(uint32_t session_id, const uint8_t *inbuf, 
 
 static esp_err_t run_scan(void)
 {
-    /* With Bluetooth enabled the Wi-Fi driver requires the default active scan times (0). */
-    wifi_scan_config_t scan_config = {
-        .scan_type = WIFI_SCAN_TYPE_ACTIVE,
-    };
-    esp_err_t err = esp_wifi_scan_start(&scan_config, true);
-    if (err != ESP_OK) {
-        return err;
-    }
-
     uint16_t count = SCAN_MAX_RECORDS;
     wifi_ap_record_t *records = calloc(count, sizeof(*records));
     if (records == NULL) {
-        (void)esp_wifi_clear_ap_list();
         return ESP_ERR_NO_MEM;
     }
-    err = esp_wifi_scan_get_ap_records(&count, records);
+    esp_err_t err = app_wifi_sta_scan(records, &count);
     if (err == ESP_OK) {
         s_scan_count = 0;
         for (uint16_t i = 0; i < count; i++) {

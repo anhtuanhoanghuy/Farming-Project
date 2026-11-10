@@ -647,6 +647,8 @@ int mqtt_proto_serialize_snapshot(const mqtt_proto_snapshot_t *s, char *out, siz
     cJSON_AddStringToObject(o, "boot_id", s->boot_id != NULL ? s->boot_id : "00000000");
     cJSON_AddStringToObject(o, "device_name", s->device_name);
     cJSON_AddStringToObject(o, "firmware_version", APP_FIRMWARE_VERSION);
+    cJSON_AddStringToObject(o, "device_type", APP_DEVICE_TYPE_NAME);
+    cJSON_AddStringToObject(o, "power_source", APP_POWER_SOURCE_NAME);
     cJSON_AddStringToObject(o, "net_interface", s->net_interface != NULL ? s->net_interface : "NONE");
     cJSON *network = cJSON_AddObjectToObject(o, "network_interfaces");
     cJSON_AddNumberToObject(network, "ethernet", NETWORK_INTERFACE_ETHERNET);

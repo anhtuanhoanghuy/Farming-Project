@@ -337,6 +337,8 @@ class DeviceSnapshot {
     this.bootId,
     this.deviceName,
     this.firmwareVersion,
+    this.deviceType,
+    this.powerSource,
     this.netInterface,
     this.networkInterfaces,
     this.ssid,
@@ -397,6 +399,12 @@ class DeviceSnapshot {
       firmwareVersion: json['firmware_version'] is String
           ? json['firmware_version'] as String
           : null,
+      deviceType: json['device_type'] is String
+          ? json['device_type'] as String
+          : null,
+      powerSource: json['power_source'] is String
+          ? json['power_source'] as String
+          : null,
       netInterface: json['net_interface'] is String
           ? json['net_interface'] as String
           : null,
@@ -432,6 +440,12 @@ class DeviceSnapshot {
 
   /// Firmware release (`firmware_version`); null for firmware that predates it.
   final String? firmwareVersion;
+
+  /// `controller` or `sensor_node`; null for firmware that predates it.
+  final String? deviceType;
+
+  /// `mains`, `battery` or `solar_battery`; null for firmware that predates it.
+  final String? powerSource;
   final String? netInterface;
   final NetworkInterfaces? networkInterfaces;
   final String? ssid;

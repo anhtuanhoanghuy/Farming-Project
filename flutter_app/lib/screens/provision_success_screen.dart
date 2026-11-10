@@ -109,6 +109,8 @@ class _ProvisionSuccessScreenState extends State<ProvisionSuccessScreen> {
           name: name,
           maxSensorCount: maxSensorCount,
           maxLoadCount: maxLoadCount,
+          deviceType: widget.args.result.deviceType,
+          powerSource: widget.args.result.powerSource,
         ),
       );
       await DeviceRepository.instance.refresh();

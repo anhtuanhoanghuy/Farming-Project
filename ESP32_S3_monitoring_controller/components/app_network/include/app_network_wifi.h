@@ -6,6 +6,7 @@
 
 #include "esp_err.h"
 #include "esp_netif.h"
+#include "esp_wifi_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,6 +44,9 @@ esp_err_t app_wifi_sta_connect(const char *ssid, const char *pass);
 
 /* Cancels pending retries and drops the association; no automatic reconnect afterwards. */
 esp_err_t app_wifi_sta_disconnect(void);
+
+/* Scans while coordinating with a pending STA connection, then resumes reconnects if requested. */
+esp_err_t app_wifi_sta_scan(wifi_ap_record_t *records, uint16_t *count);
 
 /* True while the STA is associated and holds an IPv4 address. Safe to call from any task. */
 bool app_wifi_sta_is_connected(void);

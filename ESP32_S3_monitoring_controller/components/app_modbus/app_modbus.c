@@ -586,6 +586,7 @@ static void sensor_acquisition_task(void *arg)
             }
         }
 
+#if APP_ANALOG_4_20MA_INTERFACE_COUNT > 0
         for (uint8_t a = 0U; a < APP_ANALOG_4_20MA_INTERFACE_COUNT; a++) {
             uint8_t port = (uint8_t)(APP_PORT_ANALOG_FIRST + a);
             const sensor_port_cfg_t *cfg = &device.sensor[port];
@@ -594,7 +595,7 @@ static void sensor_acquisition_task(void *arg)
                                  cfg->configured && cfg->enabled ? SENSOR_SAMPLE_ERROR_NOT_READY
                                                                  : SENSOR_SAMPLE_ERROR_DISABLED);
         }
-
+#endif
         for (uint8_t d = 0U; d < APP_DI_COUNT; d++) {
             uint8_t port = (uint8_t)(APP_PORT_DI_FIRST + d);
             read_digital_input(port, &device.sensor[port], &cycle.s[port]);

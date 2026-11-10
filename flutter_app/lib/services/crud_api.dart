@@ -30,6 +30,8 @@ const _schema = <String, Map<String, _Col>>{
     'name': _Col(_Type.text),
     'max_sensor_count': _Col(_Type.integer),
     'max_load_count': _Col(_Type.integer),
+    'device_type': _Col(_Type.text),
+    'power_source': _Col(_Type.text),
     'created_at': _Col(_Type.text, serverGenerated: true),
   },
 };
@@ -391,17 +393,22 @@ class CrudApi {
   ];
 
   static const claimNameMaxLength = 64;
+  static const deviceTypes = {'controller', 'sensor_node'};
+  static const powerSources = {'mains', 'battery', 'solar_battery'};
 
   /// Registers the device for the signed-in user through the `claim_device`
   /// RPC. A MAC that belongs to another account moves to this one: the server
   /// takes `auth.uid()` as the new owner and notifies the previous owner.
   /// The network in use is not stored: the ESP32 reports it in its MQTT
-  /// snapshot and telemetry. Capacities come from BLE provisioning.
+  /// snapshot and telemetry. Capacities, type and power source come from BLE
+  /// provisioning; firmware that does not report them is a mains controller.
   static Future<void> addDevice({
     required String macAddress,
     required String name,
     required int maxSensorCount,
     required int maxLoadCount,
+    String? deviceType,
+    String? powerSource,
   }) async {
     final mac = macAddress.trim().toLowerCase();
     var cleanName = name.trim();
@@ -420,6 +427,12 @@ class CrudApi {
       'p_name': cleanName,
       'p_max_sensor_count': maxSensorCount,
       'p_max_load_count': maxLoadCount,
+      'p_device_type': deviceTypes.contains(deviceType)
+          ? deviceType
+          : 'controller',
+      'p_power_source': powerSources.contains(powerSource)
+          ? powerSource
+          : 'mains',
     }, when: 'đăng ký thiết bị hoặc nhận chuyển quyền sở hữu');
     final row = result is List ? result.firstOrNull : result;
     final id = row is Map ? row['id'] : null;

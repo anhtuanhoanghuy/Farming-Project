@@ -36,6 +36,8 @@ typedef struct {
     uint32_t attempts;    /* Wi-Fi attempts used */
     uint32_t max_sensor_count; /* total sensor interfaces supported by this firmware */
     uint32_t max_load_count;   /* total load interfaces supported by this firmware */
+    const char *device_type;   /* controller | sensor_node */
+    const char *power_source;  /* mains | battery | solar_battery */
     bool save_config;     /* persist the received config to the NVM */
 } app_prov_apply_result_t;
 

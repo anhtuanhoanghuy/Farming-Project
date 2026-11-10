@@ -6,6 +6,8 @@ class DeviceRecord {
     this.userId,
     this.maxSensorCount,
     this.maxLoadCount,
+    this.deviceType = 'controller',
+    this.powerSource = 'mains',
     this.createdAt,
   });
 
@@ -25,6 +27,8 @@ class DeviceRecord {
       userId: json['user_id'] as String?,
       maxSensorCount: count('max_sensor_count'),
       maxLoadCount: count('max_load_count'),
+      deviceType: json['device_type'] as String? ?? 'controller',
+      powerSource: json['power_source'] as String? ?? 'mains',
       createdAt: json['created_at'] as String?,
     );
   }
@@ -37,6 +41,12 @@ class DeviceRecord {
   /// Null when the device did not report its capabilities while provisioning.
   final int? maxSensorCount;
   final int? maxLoadCount;
+
+  /// `controller` or `sensor_node`.
+  final String deviceType;
+
+  /// `mains`, `battery` or `solar_battery`.
+  final String powerSource;
   final String? createdAt;
 
   Map<String, Object?> toJson() => {
@@ -46,6 +56,8 @@ class DeviceRecord {
     'user_id': userId,
     'max_sensor_count': maxSensorCount,
     'max_load_count': maxLoadCount,
+    'device_type': deviceType,
+    'power_source': powerSource,
     'created_at': createdAt,
   };
 }

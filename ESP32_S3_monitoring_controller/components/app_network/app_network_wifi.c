@@ -14,6 +14,9 @@
 #define WIFI_BIT_LINK   (1U << 0) /* L2 associated */
 #define WIFI_BIT_GOT_IP (1U << 1) /* L3 address acquired */
 #define WIFI_BIT_WANT   (1U << 2) /* caller asked to stay connected */
+#define WIFI_BIT_CONNECT_IDLE (1U << 3)
+#define WIFI_BIT_STARTED (1U << 4)
+#define WIFI_BIT_STOPPED (1U << 5)
 
 static const char *TAG = "app_wifi";
 
@@ -23,6 +26,7 @@ static esp_timer_handle_t s_retry_timer;
 static uint32_t s_retry_count;
 static int s_last_reason;
 static bool s_initialized;
+static volatile bool s_scan_in_progress;
 
 static uint32_t backoff_delay_ms(uint32_t attempt)
 {
@@ -53,9 +57,14 @@ static void schedule_retry(void)
 
 static void try_connect(void)
 {
+    if (s_scan_in_progress) {
+        return;
+    }
+    xEventGroupClearBits(s_state, WIFI_BIT_CONNECT_IDLE);
     esp_err_t err = esp_wifi_connect();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "esp_wifi_connect failed: %s", esp_err_to_name(err));
+        xEventGroupSetBits(s_state, WIFI_BIT_CONNECT_IDLE);
         schedule_retry();
     }
 }
@@ -63,7 +72,8 @@ static void try_connect(void)
 static void retry_timer_callback(void *arg)
 {
     (void)arg;
-    if ((xEventGroupGetBits(s_state) & (WIFI_BIT_WANT | WIFI_BIT_LINK)) == WIFI_BIT_WANT) {
+    if (!s_scan_in_progress &&
+        (xEventGroupGetBits(s_state) & (WIFI_BIT_WANT | WIFI_BIT_LINK)) == WIFI_BIT_WANT) {
         try_connect();
     }
 }
@@ -76,22 +86,28 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
         switch (id) {
         case WIFI_EVENT_STA_START:
             ESP_LOGI(TAG, "STA started");
-            if (xEventGroupGetBits(s_state) & WIFI_BIT_WANT) {
+            xEventGroupClearBits(s_state, WIFI_BIT_STOPPED);
+            xEventGroupSetBits(s_state, WIFI_BIT_STARTED | WIFI_BIT_CONNECT_IDLE);
+            if ((xEventGroupGetBits(s_state) & WIFI_BIT_WANT) && !s_scan_in_progress) {
                 try_connect();
             }
             break;
+        case WIFI_EVENT_STA_STOP:
+            xEventGroupClearBits(s_state, WIFI_BIT_STARTED | WIFI_BIT_LINK | WIFI_BIT_GOT_IP);
+            xEventGroupSetBits(s_state, WIFI_BIT_STOPPED | WIFI_BIT_CONNECT_IDLE);
+            break;
         case WIFI_EVENT_STA_CONNECTED:
             (void)esp_timer_stop(s_retry_timer);
-            xEventGroupSetBits(s_state, WIFI_BIT_LINK);
+            xEventGroupSetBits(s_state, WIFI_BIT_LINK | WIFI_BIT_CONNECT_IDLE);
             ESP_LOGI(TAG, "associated with AP, waiting for IP");
             break;
         case WIFI_EVENT_STA_DISCONNECTED: {
             const wifi_event_sta_disconnected_t *event = data;
             EventBits_t bits = xEventGroupClearBits(s_state, WIFI_BIT_LINK | WIFI_BIT_GOT_IP);
-
+            xEventGroupSetBits(s_state, WIFI_BIT_CONNECT_IDLE);
             __atomic_store_n(&s_last_reason, (int)event->reason, __ATOMIC_RELAXED);
 
-            if (bits & WIFI_BIT_WANT) {
+            if ((bits & WIFI_BIT_WANT) && !s_scan_in_progress) {
                 ESP_LOGW(TAG, "disconnected (reason %d)", event->reason);
                 schedule_retry();
             } else {
@@ -143,6 +159,7 @@ esp_err_t app_wifi_sta_init(void)
         ESP_LOGE(TAG, "event group allocation failed");
         return ESP_ERR_NO_MEM;
     }
+    xEventGroupSetBits(s_state, WIFI_BIT_CONNECT_IDLE);
 
     const esp_timer_create_args_t timer_args = {
         .callback = retry_timer_callback,
@@ -252,13 +269,28 @@ esp_err_t app_wifi_sta_connect(const char *ssid, const char *pass)
     config.sta.pmf_cfg.capable = true;
     config.sta.pmf_cfg.required = false;
 
+    /* esp_wifi_set_config() fails with ESP_ERR_WIFI_STATE while a connect attempt is in
+     * flight (e.g. retrying an unreachable AP), so abort it and wait for the DISCONNECTED
+     * event before changing the credentials. */
+    (void)esp_timer_stop(s_retry_timer);
+    EventBits_t cur = xEventGroupGetBits(s_state);
+    if ((cur & WIFI_BIT_CONNECT_IDLE) == 0U && (cur & WIFI_BIT_LINK) == 0U) {
+        xEventGroupClearBits(s_state, WIFI_BIT_WANT);
+        (void)esp_wifi_disconnect();
+        cur = xEventGroupWaitBits(s_state, WIFI_BIT_CONNECT_IDLE, pdFALSE, pdTRUE,
+                                  pdMS_TO_TICKS(5000U));
+        if ((cur & WIFI_BIT_CONNECT_IDLE) == 0U) {
+            ESP_LOGE(TAG, "pending connect did not abort");
+            return ESP_ERR_TIMEOUT;
+        }
+    }
+
     esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &config);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "set config failed: %s", esp_err_to_name(err));
         return err;
     }
 
-    (void)esp_timer_stop(s_retry_timer);
     __atomic_store_n(&s_retry_count, 0U, __ATOMIC_RELAXED);
     __atomic_store_n(&s_last_reason, 0, __ATOMIC_RELAXED);
     EventBits_t bits = xEventGroupSetBits(s_state, WIFI_BIT_WANT);
@@ -272,6 +304,7 @@ esp_err_t app_wifi_sta_connect(const char *ssid, const char *pass)
             return err;
         }
     } else {
+        xEventGroupClearBits(s_state, WIFI_BIT_CONNECT_IDLE);
         try_connect();
     }
     return ESP_OK;
@@ -293,6 +326,63 @@ esp_err_t app_wifi_sta_disconnect(void)
     }
     ESP_LOGI(TAG, "disconnect requested");
     return ESP_OK;
+}
+
+esp_err_t app_wifi_sta_scan(wifi_ap_record_t *records, uint16_t *count)
+{
+    if (!s_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (records == NULL || count == NULL || *count == 0U) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    EventBits_t bits = xEventGroupGetBits(s_state);
+    bool reconnect = (bits & WIFI_BIT_WANT) != 0U;
+    s_scan_in_progress = true;
+    (void)esp_timer_stop(s_retry_timer);
+
+    esp_err_t err = ESP_OK;
+    if ((bits & WIFI_BIT_CONNECT_IDLE) == 0U && (bits & WIFI_BIT_LINK) == 0U) {
+        xEventGroupClearBits(s_state, WIFI_BIT_STOPPED);
+        err = esp_wifi_stop();
+        if (err != ESP_OK) {
+            goto scan_done;
+        }
+        bits = xEventGroupWaitBits(s_state, WIFI_BIT_STOPPED, pdFALSE, pdTRUE,
+                                   pdMS_TO_TICKS(5000U));
+        if ((bits & WIFI_BIT_STOPPED) == 0U) {
+            err = ESP_ERR_TIMEOUT;
+            goto scan_done;
+        }
+        err = esp_wifi_start();
+        if (err != ESP_OK) {
+            goto scan_done;
+        }
+        bits = xEventGroupWaitBits(s_state, WIFI_BIT_STARTED, pdFALSE, pdTRUE,
+                                   pdMS_TO_TICKS(5000U));
+        if ((bits & WIFI_BIT_STARTED) == 0U) {
+            err = ESP_ERR_TIMEOUT;
+            goto scan_done;
+        }
+    }
+
+    {
+        wifi_scan_config_t scan_config = {
+            .scan_type = WIFI_SCAN_TYPE_ACTIVE,
+        };
+        err = esp_wifi_scan_start(&scan_config, true);
+    }
+    if (err == ESP_OK) {
+        err = esp_wifi_scan_get_ap_records(count, records);
+    }
+
+scan_done:
+    s_scan_in_progress = false;
+    if (reconnect && (xEventGroupGetBits(s_state) & WIFI_BIT_LINK) == 0U) {
+        schedule_retry();
+    }
+    return err;
 }
 
 bool app_wifi_sta_is_connected(void)

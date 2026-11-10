@@ -142,6 +142,20 @@ void main() {
     );
   });
 
+  test('wifi-scan surfaces firmware error reason instead of missing total', () {
+    expect(
+      () => WifiScanMessages.parseResponse(
+        Uint8List.fromList(
+          '{"status":"ERROR","reason":"scan_failed","device_id":"aabbccddeeff"}'
+              .codeUnits,
+        ),
+      ),
+      throwsA(
+        isA<WifiScanException>().having((e) => e.code, 'code', 'scan_failed'),
+      ),
+    );
+  });
+
   test('wifi-scan rejects malformed page data', () {
     expect(
       () => WifiScanMessages.parseResponse(

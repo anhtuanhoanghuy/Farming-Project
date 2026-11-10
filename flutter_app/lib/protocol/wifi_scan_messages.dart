@@ -67,6 +67,13 @@ class WifiScanMessages {
     if (_containsWifiUnavailable(decoded)) {
       throw const WifiScanException('wifi_unavailable');
     }
+    if (decoded['status'] == 'ERROR') {
+      final reason = decoded['reason'];
+      throw WifiScanException(reason is String ? reason : 'scan_failed');
+    }
+    if (decoded['status'] != null && decoded['status'] != 'SUCCESS') {
+      throw const FormatException('wifi-scan response has an invalid status');
+    }
 
     final total = decoded['total'];
     if (total is! int || total < 0 || total > maxAccessPoints) {

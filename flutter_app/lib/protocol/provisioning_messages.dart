@@ -88,6 +88,8 @@ class ProvisioningMessages {
           attempts: attempts,
           maxSensorCount: _optionalCount(json, 'max_sensor_count'),
           maxLoadCount: _optionalCount(json, 'max_load_count'),
+          deviceType: _optionalString(json, 'device_type'),
+          powerSource: _optionalString(json, 'power_source'),
           code: _optionalString(json, 'code'),
           reason: _optionalString(json, 'reason'),
           message: _optionalString(json, 'message'),
@@ -153,6 +155,8 @@ class ProvisioningStatus {
     this.attempts,
     this.maxSensorCount,
     this.maxLoadCount,
+    this.deviceType,
+    this.powerSource,
     this.code,
     this.reason,
     this.message,
@@ -166,6 +170,12 @@ class ProvisioningStatus {
   final int? attempts;
   final int? maxSensorCount;
   final int? maxLoadCount;
+
+  /// `controller` or `sensor_node`; null for firmware that does not report it.
+  final String? deviceType;
+
+  /// `mains`, `battery` or `solar_battery`; null for older firmware.
+  final String? powerSource;
   final String? code;
   final String? reason;
   final String? message;

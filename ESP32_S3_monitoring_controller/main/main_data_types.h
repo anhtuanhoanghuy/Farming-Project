@@ -121,7 +121,11 @@ static inline bool app_port_supported(uint8_t port)
     switch (app_port_interface(port)) {
     case SENSOR_INTERFACE_RS485: return app_port_index(port) < APP_RS485_INTERFACE_COUNT;
     case SENSOR_INTERFACE_ANALOG_4_20MA:
+#if APP_ANALOG_4_20MA_INTERFACE_COUNT > 0
         return app_port_index(port) < APP_ANALOG_4_20MA_INTERFACE_COUNT;
+#else
+        return false;
+#endif
     default: return app_port_index(port) < APP_DI_COUNT;
     }
 }

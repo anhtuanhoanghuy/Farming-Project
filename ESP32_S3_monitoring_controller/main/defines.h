@@ -36,6 +36,41 @@
 #define APP_DO_COUNT 4
 #endif
 
+/* Role and power supply reported to the app during BLE provisioning (devices.device_type / power_source). */
+#define APP_DEVICE_TYPE_CONTROLLER 0
+#define APP_DEVICE_TYPE_SENSOR_NODE 1
+#define APP_POWER_SOURCE_MAINS 0
+#define APP_POWER_SOURCE_BATTERY 1
+#define APP_POWER_SOURCE_SOLAR_BATTERY 2
+
+#ifndef APP_DEVICE_TYPE
+#define APP_DEVICE_TYPE APP_DEVICE_TYPE_CONTROLLER
+#endif
+#ifndef APP_POWER_SOURCE
+#define APP_POWER_SOURCE APP_POWER_SOURCE_MAINS
+#endif
+
+#if APP_DEVICE_TYPE != APP_DEVICE_TYPE_CONTROLLER && APP_DEVICE_TYPE != APP_DEVICE_TYPE_SENSOR_NODE
+#error "Unknown APP_DEVICE_TYPE"
+#endif
+#if APP_POWER_SOURCE != APP_POWER_SOURCE_MAINS && APP_POWER_SOURCE != APP_POWER_SOURCE_BATTERY && \
+    APP_POWER_SOURCE != APP_POWER_SOURCE_SOLAR_BATTERY
+#error "Unknown APP_POWER_SOURCE"
+#endif
+
+#if APP_DEVICE_TYPE == APP_DEVICE_TYPE_CONTROLLER
+#define APP_DEVICE_TYPE_NAME "controller"
+#else
+#define APP_DEVICE_TYPE_NAME "sensor_node"
+#endif
+#if APP_POWER_SOURCE == APP_POWER_SOURCE_MAINS
+#define APP_POWER_SOURCE_NAME "mains"
+#elif APP_POWER_SOURCE == APP_POWER_SOURCE_BATTERY
+#define APP_POWER_SOURCE_NAME "battery"
+#else
+#define APP_POWER_SOURCE_NAME "solar_battery"
+#endif
+
 /* Fixed protocol/NVM slots; capability counts must never change their layout. */
 #define APP_RS485_SLOT_COUNT 4
 #define APP_ANALOG_SLOT_COUNT 1
