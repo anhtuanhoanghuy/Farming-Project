@@ -32,8 +32,14 @@ class AppConfig {
   );
   static const mqttTls = bool.fromEnvironment('MQTT_TLS', defaultValue: false);
   static const mqttPort = int.fromEnvironment('MQTT_PORT', defaultValue: 1883);
-  static const mqttUsername = String.fromEnvironment('MQTT_USERNAME');
-  static const mqttPassword = String.fromEnvironment('MQTT_PASSWORD');
+  static const mqttUsername = String.fromEnvironment(
+    'MQTT_USERNAME',
+    defaultValue: 'nacentech_senseconnect',
+  );
+  static const mqttPassword = String.fromEnvironment(
+    'MQTT_PASSWORD',
+    defaultValue: 'vdmstqg_2026',
+  );
 
   static bool get isMqttConfigured => mqttHost.trim().isNotEmpty;
 }
