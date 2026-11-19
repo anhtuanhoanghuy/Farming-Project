@@ -91,9 +91,24 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
     });
   }
 
-  void _openDevice(DeviceRecord device) {
+  Future<void> _openDevice(DeviceRecord device) async {
     unawaited(DeviceHealth.instance.load(device.macAddress));
-    // Attach device before navigating
+    // A just-shared device may not be in the MQTT session yet; without it
+    // attach cannot send GET_STATUS and no data ever loads.
+    final manager = MqttSessionManager.instance;
+    final userId = manager.userId;
+    if (userId != null && !manager.deviceIds.contains(device.macAddress)) {
+      try {
+        await manager.addDevice(
+          device.macAddress,
+          name: device.name,
+          ownerUserId: device.userId ?? userId,
+        );
+      } catch (e) {
+        debugPrint('[Diagnostics] Không đăng ký được thiết bị với MQTT: $e');
+      }
+    }
+    if (!mounted) return;
     if (DeviceState.instance.deviceId != device.macAddress) {
       unawaited(LoadSync.instance.attach(device.macAddress));
     } else {

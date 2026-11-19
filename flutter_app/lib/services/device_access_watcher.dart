@@ -20,6 +20,7 @@ class DeviceAccessWatcher extends ChangeNotifier {
   StreamSubscription<List<Map<String, dynamic>>>? _shareSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _deviceSubscription;
   List<Map<String, dynamic>>? _lastDevices;
+  Map<String, String?>? _shareStatuses;
 
   /// Stream of MAC addresses (device IDs) that were revoked or ownership transferred.
   Stream<String> get revoked => _revoked.stream;
@@ -41,17 +42,25 @@ class DeviceAccessWatcher extends ChangeNotifier {
         (event) {
           debugPrint('[DeviceAccessWatcher] 🔔 Share change event received');
           
-          // Check if any share was revoked
+          // Emit only on a transition to 'revoked'; the stream replays old
+          // revoked rows on every change, which must not re-trigger the popup.
+          final seeded = _shareStatuses != null;
+          final previous = _shareStatuses ?? <String, String?>{};
+          final next = <String, String?>{};
           for (final share in event) {
+            final shareId = share['id'] as String?;
+            if (shareId == null) continue;
             final status = share['status'] as String?;
-            if (status == 'revoked') {
+            next[shareId] = status;
+            if (seeded && status == 'revoked' && previous[shareId] != 'revoked') {
               final deviceId = share['device_id'] as String?;
               debugPrint('[DeviceAccessWatcher] ⚠️  DEVICE REVOKED: $deviceId');
-              if (deviceId != null) {
-                _revoked.add(deviceId);
+              for (final device in _repository.devices) {
+                if (device.id == deviceId) _revoked.add(device.macAddress);
               }
             }
           }
+          _shareStatuses = next;
           
           // Trigger access check on any share list change
           debugPrint('[DeviceAccessWatcher] ✅ Checking access');
@@ -218,6 +227,7 @@ class DeviceAccessWatcher extends ChangeNotifier {
     _shareSubscription = null;
     _deviceSubscription = null;
     _lastDevices = null;
+    _shareStatuses = null;
   }
 
   @override
