@@ -138,14 +138,10 @@ class _DeviceDiagnosticsScreen extends StatefulWidget {
 }
 
 class _DeviceDiagnosticsScreenState extends State<_DeviceDiagnosticsScreen> {
-  late final ShareRevokeListener _revokeListener = ShareRevokeListener(context, widget.device.macAddress);
-
   @override
   void initState() {
     super.initState();
     widget.repository.addListener(_onDevicesChanged);
-    // Listen for share revoke events
-    _revokeListener.start();
     // Check access on entry
     debugPrint('[DiagnosticsScreen] Checking access on entry for device: ${widget.device.macAddress}');
     unawaited(DeviceAccessWatcher.instance.checkAccessNow());
@@ -154,7 +150,6 @@ class _DeviceDiagnosticsScreenState extends State<_DeviceDiagnosticsScreen> {
   @override
   void dispose() {
     widget.repository.removeListener(_onDevicesChanged);
-    _revokeListener.dispose();
     super.dispose();
   }
 

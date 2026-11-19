@@ -45,19 +45,30 @@ class ShareRevokeListener {
       return;
     }
     
-    debugPrint('[ShareRevokeListener] Showing snackbar');
-    // Show snackbar
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Quyền truy cập thiết bị đã bị thu hồi')),
+    debugPrint('[ShareRevokeListener] Showing dialog');
+    // Show dialog with message and confirmation button
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Thiết bị không thể truy cập'),
+        content: const Text('Thiết bị đã bị thu hồi hoặc chuyển quyền sở hữu.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              debugPrint('[ShareRevokeListener] Dialog dismissed - popping to first route');
+              Navigator.of(ctx).pop(); // Close dialog
+              // Pop back to device list (first route in the navigator)
+              Navigator.of(context).popUntil((route) {
+                debugPrint('[ShareRevokeListener] Checking route: ${route.settings.name}');
+                return route.isFirst;
+              });
+            },
+            child: const Text('Đóng'),
+          ),
+        ],
+      ),
     );
-    
-    debugPrint('[ShareRevokeListener] Popping to first route');
-    // Pop back to device list (first route in the navigator)
-    // This will pop all device-specific screens and return to the main device list
-    Navigator.of(context).popUntil((route) {
-      debugPrint('[ShareRevokeListener] Checking route: ${route.settings.name}');
-      return route.isFirst;
-    });
   }
 
   /// Stop listening for share revoke and ownership loss events.
