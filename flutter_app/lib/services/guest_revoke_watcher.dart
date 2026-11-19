@@ -6,6 +6,7 @@ import 'crud_api.dart';
 
 /// Global watcher: auto-confirms share revoke requests for authenticated guest
 /// regardless of current screen. Singleton, started once at app startup.
+/// DeviceListScreen guest stream listener handles showing the popup notification.
 class GuestRevokeWatcher {
   GuestRevokeWatcher._();
 
@@ -14,6 +15,7 @@ class GuestRevokeWatcher {
   static GuestRevokeWatcher get instance => _instance;
 
   StreamSubscription<List<Map<String, dynamic>>>? _subscription;
+  final Set<String> _revokedShares = {};
   bool _started = false;
 
   /// Start watching for revoke_waiting shares globally
@@ -27,7 +29,8 @@ class GuestRevokeWatcher {
           for (final share in shares) {
             final status = share['status'] as String?;
             final shareId = share['id'] as String?;
-            if (status == 'revoke_waiting' && shareId != null) {
+            if (status == 'revoke_waiting' && shareId != null && !_revokedShares.contains(shareId)) {
+              _revokedShares.add(shareId);
               debugPrint('[GuestRevokeWatcher] Auto-confirming revoke for share: $shareId');
               _autoConfirmRevoke(shareId);
             }
@@ -56,5 +59,9 @@ class GuestRevokeWatcher {
     _subscription?.cancel();
     _subscription = null;
     _started = false;
+    _revokedShares.clear();
   }
 }
+
+
+
