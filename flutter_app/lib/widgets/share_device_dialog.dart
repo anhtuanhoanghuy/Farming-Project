@@ -48,6 +48,7 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
     _timeoutSub = CrudApi.revokeTimedOut.listen((_) {
       if (mounted) setState(_loadShares);
     });
+    try {
       _sharesSub = CrudApi.shareChanges('owner_id', CrudApi.userId).listen(
         (shares) {
           if (!_sharesSeeded) {
@@ -176,7 +177,7 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
   }
 
   static String _statusLabel(String status) => switch (status) {
-    'accepted' => 'Đã chấp nhận',
+    'accepted' => 'Đã thêm thành viên',
     'declined' => 'Đã từ chối',
     'revoke_waiting' => 'Đang chờ xác nhận thu hồi',
     'revoked' => 'Đã thu hồi',
@@ -295,7 +296,7 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
                   ];
                   if (shares.isEmpty) {
                     return const Text(
-                      'Chưa chia sẻ với ai.',
+                      'Chưa chia sẻ với thành viên nào.',
                       style: AppTextStyles.bodySecondary,
                     );
                   }
