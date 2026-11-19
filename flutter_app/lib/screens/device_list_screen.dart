@@ -116,6 +116,16 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         for (final row in rows)
           if (row['status'] == 'pending') row,
       ];
+      
+      // Sync revoked shares into _revokedSharesNotified to prevent duplicate popups on restart
+      for (final row in rows) {
+        final shareId = row['id'] as String?;
+        final status = row['status'] as String?;
+        if (shareId != null && status == 'revoked') {
+          _revokedSharesNotified.add(shareId);
+        }
+      }
+      
       if (mounted) setState(() => _invitations = pending);
     } catch (error) {
       if (!mounted) return;
