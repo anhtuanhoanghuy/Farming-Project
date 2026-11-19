@@ -437,7 +437,7 @@ class CrudApi {
   /// Owner or admin revokes a guest's access by `device_shares.id`.
   /// Sets status to 'revoke_waiting' and waits for guest confirmation; if the
   /// guest has not confirmed after [revokeConfirmTimeout] the share is deleted.
-  static const revokeConfirmTimeout = Duration(seconds: 10);
+  static const revokeConfirmTimeout = Duration(seconds: 3);
 
   static Future<void> revokeShare(String shareId) async {
     await _rpc('revoke_share', {'p_share_id': shareId}, when: 'thu hồi chia sẻ');
