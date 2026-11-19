@@ -14,7 +14,6 @@ import '../theme/app_text_styles.dart';
 import '../widgets/app_card.dart';
 import '../widgets/screen_scaffold.dart';
 import '../widgets/status_chip.dart';
-import '../widgets/share_revoke_detector.dart';
 import 'diagnostics_screen.dart' show presenceChip;
 import 'error_log_tab.dart';
 

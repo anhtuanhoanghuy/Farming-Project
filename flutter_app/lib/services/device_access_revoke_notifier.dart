@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../navigation/app_routes.dart';
+import '../services/crud_api.dart';
 import 'device_access_watcher.dart';
 
 /// Global service to show popup when device access is revoked or ownership transferred.
@@ -43,7 +43,7 @@ class DeviceAccessRevokeNotifier {
 
   void _showRevokePopup(String deviceId) {
     // Get current context via navigator key
-    final context = AppRoutes.navigatorKey.currentContext;
+    final context = appNavigatorKey.currentState?.overlay?.context;
     if (context == null || !context.mounted) {
       debugPrint('[DeviceAccessRevokeNotifier] Context not available');
       return;
@@ -69,7 +69,7 @@ class DeviceAccessRevokeNotifier {
   }
 
   void _navigateToTabRoot() {
-    final context = AppRoutes.navigatorKey.currentContext;
+    final context = appNavigatorKey.currentState?.overlay?.context;
     if (context == null) return;
 
     // Determine which tab we're in and navigate to its root

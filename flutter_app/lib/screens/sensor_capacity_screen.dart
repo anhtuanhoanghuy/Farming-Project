@@ -19,7 +19,6 @@ import '../widgets/app_buttons.dart';
 import '../widgets/app_card.dart';
 import '../widgets/screen_scaffold.dart';
 import '../widgets/status_chip.dart';
-import '../widgets/share_revoke_detector.dart';
 
 class SensorCapacityScreen extends StatefulWidget {
   const SensorCapacityScreen({

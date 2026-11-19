@@ -23,7 +23,6 @@ import '../widgets/app_choice_buttons.dart';
 import '../widgets/app_more_menu.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/screen_scaffold.dart';
-import '../widgets/share_revoke_detector.dart';
 
 class SensorConfigScreen extends StatefulWidget {
   const SensorConfigScreen({

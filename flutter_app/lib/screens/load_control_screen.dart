@@ -26,7 +26,6 @@ import '../widgets/app_text_field.dart';
 import '../widgets/rename_dialog.dart';
 import '../widgets/screen_scaffold.dart';
 import '../widgets/time_wheel_field.dart';
-import '../widgets/share_revoke_detector.dart';
 
 String _formatNumber(double value) =>
     value == value.roundToDouble() ? '${value.toInt()}' : '$value';

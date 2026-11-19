@@ -18,7 +18,6 @@ import '../theme/app_text_styles.dart';
 import '../widgets/app_buttons.dart';
 import '../widgets/app_card.dart';
 import '../widgets/screen_scaffold.dart';
-import '../widgets/share_revoke_detector.dart';
 import '../widgets/status_chip.dart';
 
 class DeviceListScreen extends StatefulWidget {
