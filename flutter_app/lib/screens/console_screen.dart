@@ -56,11 +56,7 @@ class _ConsoleScreenState extends State<ConsoleScreen> {
   String get _deviceId => widget.args?.deviceId ?? '';
   String get _name => widget.args?.name ?? _deviceId;
 
-  late final ShareRevokeListener _revokeListener = ShareRevokeListener(
-    context,
-    _deviceId,
-    popCount: 2, // Pop ConsoleScreen → pop _DeviceDiagnosticsScreen → reach DiagnosticsScreen
-  );
+  late final ShareRevokeListener _revokeListener = ShareRevokeListener(context, _deviceId);
 
   @override
   void initState() {
