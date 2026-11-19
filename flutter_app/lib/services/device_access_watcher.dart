@@ -133,6 +133,7 @@ class DeviceAccessWatcher extends ChangeNotifier {
       final userId = CrudApi.userId;
       List<Map<String, dynamic>> ownedDevices = [];
       List<Map<String, dynamic>> sharedDevices = [];
+      bool hadError = false;
       
       try {
         ownedDevices = await CrudApi.listDevices(userId) ?? [];
@@ -142,6 +143,7 @@ class DeviceAccessWatcher extends ChangeNotifier {
         }
       } catch (e) {
         debugPrint('[DeviceAccessWatcher] ⚠️  Error fetching owned devices: $e');
+        hadError = true;
       }
       
       try {
@@ -154,6 +156,13 @@ class DeviceAccessWatcher extends ChangeNotifier {
         }
       } catch (e) {
         debugPrint('[DeviceAccessWatcher] ⚠️  Error fetching shared devices: $e');
+        hadError = true;
+      }
+
+      // If we had errors fetching, don't emit revoked (could be network issue)
+      if (hadError) {
+        debugPrint('[DeviceAccessWatcher] Had errors fetching devices, skipping revoke check');
+        return;
       }
 
       // Create a set of still-accessible devices

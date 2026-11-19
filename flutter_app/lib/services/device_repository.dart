@@ -10,6 +10,7 @@ import '../state/device_state.dart';
 import '../state/load_controller.dart';
 import 'auth_service.dart';
 import 'crud_api.dart';
+import 'device_access_revoke_notifier.dart';
 import 'mqtt_session_manager.dart';
 import 'load_sync.dart';
 import 'traffic_log.dart';
@@ -251,6 +252,13 @@ class DeviceRepository extends ChangeNotifier {
       if (isCurrent()) {
         _loading = false;
         _hasLoaded = true;
+        // Mark all loaded devices as "seen" by revoke notifier
+        // to prevent false popups for newly added devices
+        for (final device in _devices) {
+          if (device.macAddress.isNotEmpty) {
+            DeviceAccessRevokeNotifier.instance.markDeviceAsAccessible(device.macAddress);
+          }
+        }
         notifyListeners();
       }
     }
