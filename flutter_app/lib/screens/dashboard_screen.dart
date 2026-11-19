@@ -29,7 +29,6 @@ import '../widgets/rename_dialog.dart';
 import '../widgets/screen_scaffold.dart';
 import '../widgets/share_device_dialog.dart';
 import '../widgets/status_chip.dart' show StatusChip, StatusKind;
-import '../widgets/share_revoke_detector.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, required this.device, this.inShell = true});
@@ -46,11 +45,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   int _tab = 0;
   late String _name = widget.device.name;
   StreamSubscription<String>? _transferSubscription;
-  late final ShareRevokeListener _revokeListener = ShareRevokeListener(
-    context,
-    widget.device.deviceId,
-    tabIndex: 0, // Go to Devices tab
-  );
 
   @override
   void initState() {
@@ -64,16 +58,12 @@ class _DashboardScreenState extends State<DashboardScreen>
       }
     });
     
-    // Listen for share revoke events
-    _revokeListener.start();
-    
     unawaited(LoadSync.instance.attach(widget.device.deviceId));
   }
 
   @override
   void dispose() {
     _transferSubscription?.cancel();
-    _revokeListener.dispose();
     WidgetsBinding.instance.removeObserver(this);
     LoadSync.instance.detach();
     super.dispose();

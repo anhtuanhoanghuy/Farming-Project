@@ -434,7 +434,7 @@ class CrudApi {
   static Future<void> revokeShare(String shareId) =>
       _rpc('revoke_share', {'p_share_id': shareId}, when: 'thu hồi chia sẻ');
 
-  /// Guest confirms they received revoke notification (after showing popup).
+  /// Guest confirms they received revoke request.
   /// Updates status from 'revoke_waiting' to 'revoked'.
   static Future<void> confirmRevoke(String shareId) =>
       _rpc('confirm_revoke', {'p_share_id': shareId}, when: 'xác nhận bị thu hồi');

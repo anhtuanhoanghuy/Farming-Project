@@ -24,7 +24,6 @@ import '../widgets/app_card.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/screen_scaffold.dart';
 import '../widgets/status_chip.dart';
-import '../widgets/share_revoke_detector.dart';
 import 'console_screen.dart' show ConsoleArgs;
 
 /// Chip of a device row, from the presence the ESP32 reported (LWT/snapshot).
@@ -148,18 +147,10 @@ class _DeviceDiagnosticsScreen extends StatefulWidget {
 }
 
 class _DeviceDiagnosticsScreenState extends State<_DeviceDiagnosticsScreen> {
-  late final ShareRevokeListener _revokeListener = ShareRevokeListener(
-    context,
-    widget.device.macAddress,
-    tabIndex: 1, // Go to Diagnostics tab
-  );
-
   @override
   void initState() {
     super.initState();
     widget.repository.addListener(_onDevicesChanged);
-    // Listen for share revoke events
-    _revokeListener.start();
     // Check access on entry
     debugPrint('[DiagnosticsScreen] Checking access on entry for device: ${widget.device.macAddress}');
     unawaited(DeviceAccessWatcher.instance.checkAccessNow());
@@ -168,7 +159,6 @@ class _DeviceDiagnosticsScreenState extends State<_DeviceDiagnosticsScreen> {
   @override
   void dispose() {
     widget.repository.removeListener(_onDevicesChanged);
-    _revokeListener.dispose();
     super.dispose();
   }
 
