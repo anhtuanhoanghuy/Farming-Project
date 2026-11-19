@@ -10,6 +10,7 @@ import '../protocol/device_snapshot.dart';
 import '../protocol/device_telemetry.dart';
 import '../protocol/mqtt_payloads.dart';
 import '../protocol/port_ids.dart';
+import '../services/auth_service.dart';
 import '../services/crud_api.dart';
 import '../services/device_api.dart';
 import '../services/device_repository.dart';
@@ -26,7 +27,9 @@ import '../widgets/app_card.dart';
 import '../widgets/app_more_menu.dart';
 import '../widgets/rename_dialog.dart';
 import '../widgets/screen_scaffold.dart';
-import '../widgets/status_chip.dart';
+import '../widgets/share_device_dialog.dart';
+import '../widgets/status_chip.dart' show StatusChip, StatusKind;
+import '../widgets/share_revoke_detector.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, required this.device, this.inShell = true});
@@ -43,6 +46,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   int _tab = 0;
   late String _name = widget.device.name;
   StreamSubscription<String>? _transferSubscription;
+  late final ShareRevokeListener _revokeListener = ShareRevokeListener(context, widget.device.deviceId);
 
   @override
   void initState() {
@@ -55,12 +59,17 @@ class _DashboardScreenState extends State<DashboardScreen>
         Navigator.of(context).maybePop();
       }
     });
+    
+    // Listen for share revoke events
+    _revokeListener.start();
+    
     unawaited(LoadSync.instance.attach(widget.device.deviceId));
   }
 
   @override
   void dispose() {
     _transferSubscription?.cancel();
+    _revokeListener.dispose();
     WidgetsBinding.instance.removeObserver(this);
     LoadSync.instance.detach();
     super.dispose();
@@ -241,8 +250,81 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (mounted) navigator.maybePop();
   }
 
+  void _shareDevice() {
+    final record = DeviceRepository.instance.byMac(widget.device.deviceId);
+    if (record == null) return;
+    showDialog<void>(
+      context: context,
+      builder: (_) =>
+          ShareDeviceDialog(deviceId: record.id, deviceName: _name),
+    );
+  }
+
+  Future<void> _leaveDevice() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text(
+          'Rời khỏi thiết bị',
+          style: AppTextStyles.sectionTitle,
+        ),
+        content: Text(
+          'Bạn sẽ không còn xem hay điều khiển được thiết bị $_name nữa.',
+          style: AppTextStyles.bodySecondary,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Hủy',
+              style: AppTextStyles.link.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'Rời khỏi',
+              style: AppTextStyles.link.copyWith(color: AppColors.errorText),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final record = DeviceRepository.instance.byMac(widget.device.deviceId);
+    if (record == null) return;
+    try {
+      await CrudApi.run(
+        'Nhấn Rời khỏi thiết bị được chia sẻ "$_name"',
+        () => CrudApi.leaveSharedDevice(record.id),
+      );
+      await DeviceRepository.instance.refresh();
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(userErrorText('Không rời được thiết bị', error)),
+        ),
+      );
+      return;
+    }
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Đã rời khỏi thiết bị')),
+    );
+    if (mounted) navigator.maybePop();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final record = DeviceRepository.instance.byMac(widget.device.deviceId);
+    // Assume ownership until the record loads, so the menu does not flash.
+    final isOwner = record == null || record.userId == AuthService.userId;
     return ScreenScaffold(
       title: 'Bảng điều khiển',
       showBack: true,
@@ -250,30 +332,82 @@ class _DashboardScreenState extends State<DashboardScreen>
       navIndex: widget.inShell ? null : 0,
       onNavTap: widget.inShell ? null : (i) => AppRoutes.openTab(context, i),
       headerTrailing: AppMoreMenu<String>(
-        onSelected: (_) => _confirmDelete(),
-        itemBuilder: (_) => const [
-          PopupMenuItem(
-            value: 'delete',
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.delete_outline_rounded,
-                  size: 20,
-                  color: AppColors.errorText,
-                ),
-                SizedBox(width: 10),
-                Text(
-                  'Xóa thiết bị',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+        onSelected: (value) {
+          switch (value) {
+            case 'share':
+              _shareDevice();
+            case 'leave':
+              _leaveDevice();
+            default:
+              _confirmDelete();
+          }
+        },
+        itemBuilder: (_) => [
+          if (isOwner)
+            const PopupMenuItem(
+              value: 'share',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.person_add_alt_1_rounded,
+                    size: 20,
+                    color: AppColors.textPrimary,
+                  ),
+                  SizedBox(width: 10),
+                  Text(
+                    'Chia sẻ thiết bị',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+          if (isOwner)
+            const PopupMenuItem(
+              value: 'delete',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.delete_outline_rounded,
+                    size: 20,
                     color: AppColors.errorText,
                   ),
-                ),
-              ],
+                  SizedBox(width: 10),
+                  Text(
+                    'Xóa thiết bị',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.errorText,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            const PopupMenuItem(
+              value: 'leave',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.logout_rounded,
+                    size: 20,
+                    color: AppColors.errorText,
+                  ),
+                  SizedBox(width: 10),
+                  Text(
+                    'Rời khỏi thiết bị',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.errorText,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
         ],
       ),
       body: RefreshIndicator(

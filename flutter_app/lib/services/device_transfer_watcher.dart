@@ -47,12 +47,19 @@ class DeviceTransferWatcher {
 
   /// Starts watching the notices of [userId]; safe to call many times.
   void start(String userId) {
-    if (_userId == userId && _subscription != null) return;
+    debugPrint('[Transfer] 🔔 Starting transfer watcher for user: $userId');
+    if (_userId == userId && _subscription != null) {
+      debugPrint('[Transfer] Already watching $userId, skipping');
+      return;
+    }
     stop();
     _userId = userId;
     _subscription = _notices(userId).listen(
-      (rows) => _queue = _queue.then((_) => _process(rows)),
-      onError: (Object error) => debugPrint('[Transfer] Stream lỗi: $error'),
+      (rows) {
+        debugPrint('[Transfer] 🔔 Transfer notice received: ${rows.length} rows');
+        _queue = _queue.then((_) => _process(rows));
+      },
+      onError: (Object error) => debugPrint('[Transfer] ❌ Stream error: $error'),
     );
   }
 
@@ -64,34 +71,44 @@ class DeviceTransferWatcher {
   }
 
   Future<void> _process(List<Map<String, dynamic>> rows) async {
+    debugPrint('[Transfer] Processing ${rows.length} transfer notices');
     for (final notice in rows) {
       final id = notice['id'];
       final mac = notice['mac_address'];
-      if (id == null || mac is! String || !_handled.add(id)) continue;
+      debugPrint('[Transfer] Notice: id=$id, mac=$mac');
+      if (id == null || mac is! String || !_handled.add(id)) {
+        debugPrint('[Transfer] Skipping notice (already handled or invalid)');
+        continue;
+      }
       try {
         await _handle(id, mac);
       } catch (error) {
         _handled.remove(id);
-        debugPrint('[Transfer] Không xử lý được thông báo $id: $error');
+        debugPrint('[Transfer] ❌ Could not handle notice $id: $error');
       }
     }
   }
 
   Future<void> _handle(Object id, String mac) async {
+    debugPrint('[Transfer] Handling notice for device: $mac');
     final name = _repository.devices
         .where((device) => device.macAddress == mac)
         .map((device) => device.name)
         .firstOrNull;
+    debugPrint('[Transfer] Device name: $name');
     // The database decides: a notice can be old if the device came back.
     await _repository.refresh();
     if (_repository.error != null) {
+      debugPrint('[Transfer] Repository error after refresh: ${_repository.error}');
       _handled.remove(id);
       return;
     }
     final stillOwned = _repository.devices.any(
       (device) => device.macAddress == mac,
     );
+    debugPrint('[Transfer] Still owned by current user? $stillOwned');
     if (!stillOwned) {
+      debugPrint('[Transfer] ⚠️  Device $mac is no longer owned - forgetting');
       await _forgetDevice(mac);
       _transfers.add(mac);
       _announce(
@@ -100,8 +117,9 @@ class DeviceTransferWatcher {
     }
     try {
       await _deleteNotice(id);
+      debugPrint('[Transfer] Deleted transfer notice: $id');
     } catch (error) {
-      debugPrint('[Transfer] Không xóa được thông báo $id: $error');
+      debugPrint('[Transfer] ❌ Could not delete notice $id: $error');
     }
   }
 

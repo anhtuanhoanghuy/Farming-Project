@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../core/app_config.dart';
 import '../navigation/app_routes.dart';
 import '../services/auth_service.dart';
+import '../services/device_access_watcher.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -33,6 +34,10 @@ class _SplashScreenState extends State<SplashScreen> {
       signedIn = false;
     }
     if (!mounted) return;
+    // Start watching for device access changes if signed in
+    if (signedIn) {
+      DeviceAccessWatcher.instance.start();
+    }
     Navigator.of(
       context,
     ).pushReplacementNamed(signedIn ? AppRoutes.shell : AppRoutes.login);

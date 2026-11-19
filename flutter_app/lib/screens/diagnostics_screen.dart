@@ -9,6 +9,7 @@ import '../protocol/device_errors.dart';
 import '../protocol/device_snapshot.dart';
 import '../protocol/mqtt_payloads.dart';
 import '../protocol/port_ids.dart';
+import '../services/device_access_watcher.dart';
 import '../services/device_repository.dart';
 import '../services/load_sync.dart';
 import '../services/mqtt_session_manager.dart';
@@ -23,6 +24,7 @@ import '../widgets/app_card.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/screen_scaffold.dart';
 import '../widgets/status_chip.dart';
+import '../widgets/share_revoke_detector.dart';
 import 'console_screen.dart' show ConsoleArgs;
 
 /// Chip of a device row, from the presence the ESP32 reported (LWT/snapshot).
@@ -136,15 +138,23 @@ class _DeviceDiagnosticsScreen extends StatefulWidget {
 }
 
 class _DeviceDiagnosticsScreenState extends State<_DeviceDiagnosticsScreen> {
+  late final ShareRevokeListener _revokeListener = ShareRevokeListener(context, widget.device.macAddress);
+
   @override
   void initState() {
     super.initState();
     widget.repository.addListener(_onDevicesChanged);
+    // Listen for share revoke events
+    _revokeListener.start();
+    // Check access on entry
+    debugPrint('[DiagnosticsScreen] Checking access on entry for device: ${widget.device.macAddress}');
+    unawaited(DeviceAccessWatcher.instance.checkAccessNow());
   }
 
   @override
   void dispose() {
     widget.repository.removeListener(_onDevicesChanged);
+    _revokeListener.dispose();
     super.dispose();
   }
 

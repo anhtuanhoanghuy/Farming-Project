@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../navigation/app_routes.dart';
+import '../services/device_access_watcher.dart';
 import '../services/mqtt_session_manager.dart';
 import '../services/traffic_log.dart';
 import '../state/device_presence.dart';
@@ -11,6 +14,7 @@ import '../theme/app_text_styles.dart';
 import '../widgets/app_card.dart';
 import '../widgets/screen_scaffold.dart';
 import '../widgets/status_chip.dart';
+import '../widgets/share_revoke_detector.dart';
 import 'diagnostics_screen.dart' show presenceChip;
 import 'error_log_tab.dart';
 
@@ -52,15 +56,25 @@ class _ConsoleScreenState extends State<ConsoleScreen> {
   String get _deviceId => widget.args?.deviceId ?? '';
   String get _name => widget.args?.name ?? _deviceId;
 
+  late final ShareRevokeListener _revokeListener = ShareRevokeListener(context, _deviceId);
+
   @override
   void initState() {
     super.initState();
     DevicePresence.instance.start();
+    // Listen for share revoke events
+    if (_deviceId.isNotEmpty) {
+      _revokeListener.start();
+      // Check access on entry
+      debugPrint('[ConsoleScreen] Checking access on entry for device: $_deviceId');
+      unawaited(DeviceAccessWatcher.instance.checkAccessNow());
+    }
   }
 
   @override
   void dispose() {
     _scroll.dispose();
+    _revokeListener.dispose();
     super.dispose();
   }
 

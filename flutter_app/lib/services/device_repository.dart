@@ -74,6 +74,14 @@ class DeviceRepository extends ChangeNotifier {
   List<DeviceRecord> get devices => _devices;
   bool get isLoading => _loading;
 
+  /// The loaded record for [macAddress], or null if not loaded yet.
+  DeviceRecord? byMac(String macAddress) {
+    for (final device in _devices) {
+      if (device.macAddress == macAddress) return device;
+    }
+    return null;
+  }
+
   /// True once a refresh finished (successfully or not).
   bool get hasLoaded => _hasLoaded;
 
@@ -291,12 +299,18 @@ class DeviceRepository extends ChangeNotifier {
   }
 
   /// Reads the rows directly, or through [CrudApi] (shown in the CRUD log)
-  /// when an action such as pull-to-refresh is recording CRUD calls.
+  /// when an action such as pull-to-refresh is recording CRUD calls. For a
+  /// specific user (non-admin mode), devices shared with that account
+  /// (accepted invitations) are appended so they appear in their list too.
   static Future<List<Map<String, Object?>>> _fetchFromSupabase(
     String? userId,
   ) async {
-    final rows = await CrudApi.listDevices(userId);
-    return [for (final row in rows) Map<String, Object?>.from(row)];
+    final owned = await CrudApi.listDevices(userId);
+    final rows = [for (final row in owned) Map<String, Object?>.from(row)];
+    if (userId == null) return rows;
+    final shared = await CrudApi.listSharedDevices();
+    rows.addAll([for (final row in shared) Map<String, Object?>.from(row)]);
+    return rows;
   }
 
   static String _cacheKey(String userId) => 'devices.cache.$userId';

@@ -339,6 +339,123 @@ class CrudApi {
     );
   }
 
+  /// Devices shared with the signed-in account (accepted invitations), via
+  /// the `devices_select_shared_guest` RLS policy.
+  static Future<List<Map<String, dynamic>>> listSharedDevices() async {
+    // Get all accepted shares first
+    final shares = await _db
+        .from('device_shares')
+        .select('device_id')
+        .eq('guest_id', userId)
+        .eq('status', 'accepted');
+    
+    if (shares.isEmpty) return [];
+    
+    // Get the actual devices
+    final deviceIds = [
+      for (final share in shares)
+        if (share['device_id'] is String)
+          share['device_id'] as String
+    ];
+    
+    if (deviceIds.isEmpty) return [];
+    
+    final devices = await _db
+        .from('devices')
+        .select()
+        .inFilter('id', deviceIds);
+    
+    return devices.cast<Map<String, dynamic>>();
+  }
+
+  // ------------------------------------------------------------- sharing
+
+  /// The signed-in account's own fixed share code (`profiles.share_code`).
+  static Future<String?> myShareCode() async {
+    final row = await _db
+        .from('profiles')
+        .select('share_code')
+        .eq('user_id', userId)
+        .maybeSingle();
+    return row?['share_code'] as String?;
+  }
+
+  /// Replaces the signed-in account's share code and returns the new one.
+  static Future<String> regenerateShareCode() async {
+    final result = await _rpc(
+      'regenerate_share_code',
+      const {},
+      when: 'tạo lại mã chia sẻ',
+    );
+    if (result is! String) {
+      throw const CrudException('Không tạo được mã chia sẻ mới');
+    }
+    return result;
+  }
+
+  /// Looks up the account behind a share code without inviting it; null when
+  /// no account has that code.
+  static Future<Map<String, dynamic>?> lookupShareCode(String code) async {
+    Object? result;
+    String? error;
+    try {
+      result = await _db.rpc('lookup_share_code', params: {'p_code': code});
+    } on PostgrestException catch (e) {
+      error = '${e.message} (code ${e.code})';
+    }
+    if (error != null) throw CrudException(error);
+    final rows = result is List ? result : const [];
+    return rows.isEmpty ? null : Map<String, dynamic>.from(rows.first as Map);
+  }
+
+  /// Invites the account behind [code] to view/control [deviceId].
+  static Future<void> inviteByShareCode(String deviceId, String code) => _rpc(
+    'invite_by_share_code',
+    {'p_device_id': deviceId, 'p_code': code},
+    when: 'chia sẻ thiết bị bằng mã',
+  );
+
+  /// Everyone a device is currently shared with, owner's view.
+  static Future<List<Map<String, dynamic>>> listDeviceShares(
+    String deviceId,
+  ) async {
+    final result = await _db.rpc(
+      'list_device_shares',
+      params: {'p_device_id': deviceId},
+    );
+    return [
+      for (final row in (result is List ? result : const []))
+        Map<String, dynamic>.from(row as Map),
+    ];
+  }
+
+  /// Owner or admin revokes a guest's access by `device_shares.id`.
+  static Future<void> revokeShare(String shareId) =>
+      _rpc('revoke_share', {'p_share_id': shareId}, when: 'thu hồi chia sẻ');
+
+  /// Invitations sent to the signed-in account, any status.
+  static Future<List<Map<String, dynamic>>> listMyInvitations() async {
+    final result = await _rpc('list_my_invitations', const {}, when: 'tải lời mời chia sẻ');
+    return [
+      for (final row in (result is List ? result : const []))
+        Map<String, dynamic>.from(row as Map),
+    ];
+  }
+
+  /// Guest accepts or declines a pending invitation.
+  static Future<void> respondShare(String shareId, bool accept) => _rpc(
+    'respond_share',
+    {'p_share_id': shareId, 'p_accept': accept},
+    when: accept ? 'đồng ý lời mời chia sẻ' : 'từ chối lời mời chia sẻ',
+  );
+
+  /// Guest removes themself from a device shared with them.
+  static Future<void> leaveSharedDevice(String deviceId) => _rpc(
+    'leave_shared_device',
+    {'p_device_id': deviceId},
+    when: 'rời khỏi thiết bị được chia sẻ',
+  );
+
   static Future<List<Map<String, dynamic>>> _readDevices(
     Map<String, Object?> match,
   ) async {
@@ -438,6 +555,24 @@ class CrudApi {
     final id = row is Map ? row['id'] : null;
     if (id is String) _deviceUuids[mac] = id;
   }
+
+  /// Emits whenever a `devices` row changes for the signed-in account.
+  /// Detects ownership changes (transfer) for guest users.
+  static Stream<List<Map<String, dynamic>>> deviceChanges(String userId) => _db
+      .from('devices')
+      .stream(primaryKey: ['id'])
+      .eq('user_id', userId);
+
+  /// Emits whenever a `device_shares` row visible to the signed-in account
+  /// changes. [column] is `owner_id` or `guest_id`; needs the table in the
+  /// `supabase_realtime` publication.
+  static Stream<List<Map<String, dynamic>>> shareChanges(
+    String column,
+    String value,
+  ) => _db
+      .from('device_shares')
+      .stream(primaryKey: ['id'])
+      .eq(column, value);
 
   /// Transfer notices addressed to the signed-in account (previous owner).
   static Stream<List<Map<String, dynamic>>> transferNotices(String ownerId) =>

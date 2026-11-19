@@ -9,6 +9,7 @@ import '../protocol/device_snapshot.dart';
 import '../protocol/mqtt_payloads.dart';
 import '../protocol/port_ids.dart';
 import '../services/crud_api.dart' show appMessengerKey;
+import '../services/device_access_watcher.dart';
 import '../services/load_sync.dart';
 import '../services/mqtt_session_manager.dart';
 import '../state/device_state.dart';
@@ -18,8 +19,9 @@ import '../widgets/app_buttons.dart';
 import '../widgets/app_card.dart';
 import '../widgets/screen_scaffold.dart';
 import '../widgets/status_chip.dart';
+import '../widgets/share_revoke_detector.dart';
 
-class SensorCapacityScreen extends StatelessWidget {
+class SensorCapacityScreen extends StatefulWidget {
   const SensorCapacityScreen({
     super.key,
     required this.device,
@@ -28,6 +30,29 @@ class SensorCapacityScreen extends StatelessWidget {
 
   final DeviceSelection device;
   final bool inShell;
+
+  @override
+  State<SensorCapacityScreen> createState() => _SensorCapacityScreenState();
+}
+
+class _SensorCapacityScreenState extends State<SensorCapacityScreen> {
+  late final ShareRevokeListener _revokeListener = ShareRevokeListener(context, widget.device.deviceId);
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen for share revoke events
+    _revokeListener.start();
+    // Check access on entry
+    debugPrint('[SensorCapacityScreen] Checking access on entry for device: ${widget.device.deviceId}');
+    unawaited(DeviceAccessWatcher.instance.checkAccessNow());
+  }
+
+  @override
+  void dispose() {
+    _revokeListener.dispose();
+    super.dispose();
+  }
 
   /// Sensors come from the snapshot the ESP32 publishes after each change.
   List<SensorInput> _inputsOf(DeviceSnapshot? snapshot, String type) => [
@@ -40,7 +65,7 @@ class SensorCapacityScreen extends StatelessWidget {
 
   SensorConfigSelection _selectionFor(SensorInput sensor) =>
       SensorConfigSelection(
-        device: device,
+        device: widget.device,
         interfaceType: sensor.interfaceType,
         portId: sensor.portId,
         name: sensor.name,
@@ -64,7 +89,7 @@ class SensorCapacityScreen extends StatelessWidget {
       return _openConfig(
         context,
         SensorConfigSelection(
-          device: device,
+          device: widget.device,
           interfaceType: type,
           portId: ports.first,
           name: 'new_sensor',
@@ -103,7 +128,7 @@ class SensorCapacityScreen extends StatelessWidget {
     DeviceState.instance.hideSensor(sensor.portId);
     try {
       await MqttSessionManager.instance.publishCommandAndWaitForAck(
-        device.deviceId,
+        widget.device.deviceId,
         MqttPayloads.deleteSensor(
           cmdId: MqttPayloads.newCommandId(),
           sensorId: sensor.portId,
@@ -127,9 +152,9 @@ class SensorCapacityScreen extends StatelessWidget {
       showMore: false,
       title: 'Quản lý cảm biến',
       showBack: true,
-      embedInTab: inShell,
-      navIndex: inShell ? null : 0,
-      onNavTap: inShell ? null : (i) => AppRoutes.openTab(context, i),
+      embedInTab: widget.inShell,
+      navIndex: widget.inShell ? null : 0,
+      onNavTap: widget.inShell ? null : (i) => AppRoutes.openTab(context, i),
       body: RefreshIndicator(
         onRefresh: LoadSync.instance.requestStatus,
         child: ListenableBuilder(

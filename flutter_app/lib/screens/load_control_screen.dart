@@ -11,6 +11,7 @@ import '../protocol/load_automation.dart';
 import '../protocol/mqtt_payloads.dart';
 import '../protocol/port_ids.dart';
 import '../services/crud_api.dart' show appMessengerKey;
+import '../services/device_access_watcher.dart';
 import '../services/load_sync.dart';
 import '../services/mqtt_session_manager.dart';
 import '../state/device_state.dart';
@@ -25,6 +26,7 @@ import '../widgets/app_text_field.dart';
 import '../widgets/rename_dialog.dart';
 import '../widgets/screen_scaffold.dart';
 import '../widgets/time_wheel_field.dart';
+import '../widgets/share_revoke_detector.dart';
 
 String _formatNumber(double value) =>
     value == value.roundToDouble() ? '${value.toInt()}' : '$value';
@@ -196,6 +198,8 @@ class _LoadControlScreenState extends State<LoadControlScreen> {
   /// the ESP32 is the source of truth.
   bool _resync = false;
 
+  late final ShareRevokeListener _revokeListener = ShareRevokeListener(context, widget.device.deviceId);
+
   LoadController get _load => widget.load;
   String get _mac => widget.device.deviceId;
 
@@ -210,6 +214,11 @@ class _LoadControlScreenState extends State<LoadControlScreen> {
     _duration.addListener(_refresh);
     _syncFromSnapshot(force: true);
     _load.addListener(_onLoadChanged);
+    // Listen for share revoke events
+    _revokeListener.start();
+    // Check access on entry
+    debugPrint('[LoadControlScreen] Checking access on entry for device: $_mac');
+    unawaited(DeviceAccessWatcher.instance.checkAccessNow());
   }
 
   @override
@@ -224,6 +233,7 @@ class _LoadControlScreenState extends State<LoadControlScreen> {
     }
     _delay.dispose();
     _duration.dispose();
+    _revokeListener.dispose();
     super.dispose();
   }
 

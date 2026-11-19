@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../core/error_text.dart';
 import '../models/device_record.dart';
 import '../models/device_selection.dart';
 import '../navigation/app_routes.dart';
@@ -29,19 +31,100 @@ class DeviceListScreen extends StatefulWidget {
 
 class _DeviceListScreenState extends State<DeviceListScreen> {
   final _repository = DeviceRepository.instance;
+  List<Map<String, dynamic>> _invitations = [];
+  bool _invitationsExpanded = false;
+  StreamSubscription<List<Map<String, dynamic>>>? _sharesSub;
+  bool _sharesSeeded = false;
 
   @override
   void initState() {
     super.initState();
     DevicePresence.instance.start();
     DeviceHealth.instance.start();
-    _repository.refresh();
+    // Load devices first
+    _repository.refresh().whenComplete(() {
+      // Then load invitations after devices are ready
+      if (mounted) unawaited(_loadInvitations());
+    });
+    // Listen for real-time invitation updates
+    try {
+      _sharesSub = CrudApi.shareChanges('guest_id', CrudApi.userId).listen(
+        (event) {
+          // Skip first event (initial snapshot, already loaded in initState)
+          if (!_sharesSeeded) {
+            _sharesSeeded = true;
+            return;
+          }
+          // On subsequent events, reload invitations and device list
+          if (mounted) {
+            unawaited(_loadInvitations());
+            unawaited(_repository.refresh());
+          }
+        },
+        onError: (e) {
+          debugPrint('[Invitations] Stream error: $e');
+        },
+        cancelOnError: false,
+      );
+    } catch (e) {
+      debugPrint('[Invitations] Subscribe error: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _sharesSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadInvitations() async {
+    try {
+      final rows = await CrudApi.run(
+        'Tải lời mời chia sẻ',
+        CrudApi.listMyInvitations,
+      );
+      final pending = [
+        for (final row in rows)
+          if (row['status'] == 'pending') row,
+      ];
+      if (mounted) setState(() => _invitations = pending);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userErrorText('Không tải được lời mời chia sẻ', error)),
+        ),
+      );
+    }
+  }
+
+  Future<void> _respondInvitation(String shareId, bool accept) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await CrudApi.run(
+        accept ? 'Chấp nhận lời mời chia sẻ' : 'Từ chối lời mời chia sẻ',
+        () => CrudApi.respondShare(shareId, accept),
+      );
+      await _loadInvitations();
+      await _repository.refresh();
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(userErrorText('Không phản hồi được lời mời', error)),
+        ),
+      );
+    }
   }
 
   /// Pull-to-refresh: reloads the devices with a CRUD `SELECT`, shown in the
   /// CRUD log in developer mode.
-  Future<void> _reload() =>
-      CrudApi.run('Kéo xuống làm mới danh sách thiết bị', _repository.refresh);
+  Future<void> _reload() async {
+    await CrudApi.run(
+      'Kéo xuống làm mới danh sách thiết bị',
+      _repository.refresh,
+    );
+    if (mounted) unawaited(_loadInvitations());
+  }
 
   /// Chip from the device's retained presence message (LWT).
   static (String, StatusKind) _presenceChip(bool connected, bool? online) {
@@ -173,6 +256,17 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                       },
                     ),
                   ],
+                  if (_invitations.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    _InvitationsDropdown(
+                      invitations: _invitations,
+                      expanded: _invitationsExpanded,
+                      onToggle: () => setState(
+                        () => _invitationsExpanded = !_invitationsExpanded,
+                      ),
+                      onRespond: _respondInvitation,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -194,6 +288,98 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         value == null ? '? $unit' : '$value $unit';
     return 'Tối đa ${count(snapshot?.capabilities.maxSensorCount ?? device.maxSensorCount, 'cảm biến')} · '
         '${count(snapshot?.capabilities.maxLoadCount ?? device.maxLoadCount, 'tải')}';
+  }
+}
+
+class _InvitationsDropdown extends StatelessWidget {
+  const _InvitationsDropdown({
+    required this.invitations,
+    required this.expanded,
+    required this.onToggle,
+    required this.onRespond,
+  });
+
+  final List<Map<String, dynamic>> invitations;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final void Function(String shareId, bool accept) onRespond;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.mail_outline_rounded,
+                    size: 20,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Lời mời chia sẻ (${invitations.length})',
+                      style: AppTextStyles.cardTitle,
+                    ),
+                  ),
+                  Icon(
+                    expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (expanded)
+            for (final invite in invitations)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            (invite['device_name'] ?? 'Thiết bị').toString(),
+                            style: AppTextStyles.bodyMedium,
+                          ),
+                          Text(
+                            'Từ: ${invite['owner_email'] ?? invite['owner_id']}',
+                            style: AppTextStyles.caption,
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          onRespond(invite['share_id'] as String, false),
+                      child: Text(
+                        'Từ chối',
+                        style: AppTextStyles.link.copyWith(
+                          color: AppColors.errorText,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          onRespond(invite['share_id'] as String, true),
+                      child: const Text('Chấp nhận'),
+                    ),
+                  ],
+                ),
+              ),
+        ],
+      ),
+    );
   }
 }
 

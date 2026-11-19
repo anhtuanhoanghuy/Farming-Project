@@ -10,6 +10,7 @@ import '../protocol/device_snapshot.dart';
 import '../protocol/mqtt_payloads.dart';
 import '../protocol/port_ids.dart';
 import '../services/crud_api.dart' show appMessengerKey;
+import '../services/device_access_watcher.dart';
 import '../services/load_sync.dart';
 import '../services/mqtt_session_manager.dart';
 import '../state/developer_access_controller.dart';
@@ -22,6 +23,7 @@ import '../widgets/app_choice_buttons.dart';
 import '../widgets/app_more_menu.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/screen_scaffold.dart';
+import '../widgets/share_revoke_detector.dart';
 
 class SensorConfigScreen extends StatefulWidget {
   const SensorConfigScreen({
@@ -50,15 +52,27 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
             : '1'),
   );
   late final _name = TextEditingController(text: widget.selection.name);
+  late final ShareRevokeListener _revokeListener = ShareRevokeListener(context, widget.selection.device.deviceId);
 
   /// A sensor already on its port keeps its type and port; only a new one
   /// can choose them.
   late final bool _typeLocked = _savedInput(_portId) != null;
 
   @override
+  void initState() {
+    super.initState();
+    // Listen for share revoke events
+    _revokeListener.start();
+    // Check access on entry
+    debugPrint('[SensorConfigScreen] Checking access on entry for device: ${widget.selection.device.deviceId}');
+    unawaited(DeviceAccessWatcher.instance.checkAccessNow());
+  }
+
+  @override
   void dispose() {
     _slave.dispose();
     _name.dispose();
+    _revokeListener.dispose();
     super.dispose();
   }
 

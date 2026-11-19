@@ -2,7 +2,7 @@
 class AppConfig {
   AppConfig._();
 
-  static const appVersion = '1.0.2';
+  static const appVersion = '1.1.0';
 
   /// Supabase project settings; pass with --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
   static const supabaseUrl = String.fromEnvironment(

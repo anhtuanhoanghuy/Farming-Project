@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/app_config.dart';
+import '../core/error_text.dart';
 import '../navigation/app_routes.dart';
 import '../services/auth_service.dart';
+import '../services/crud_api.dart';
 import '../services/device_repository.dart';
 import '../services/device_transfer_watcher.dart';
 import '../state/admin_access_controller.dart';
@@ -25,6 +30,39 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   static const _versionTapLimit = 30;
   int _versionTapCount = 0;
+  String? _shareCode;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadShareCode());
+  }
+
+  Future<void> _loadShareCode() async {
+    try {
+      final code = await CrudApi.run(
+        'Tải mã chia sẻ',
+        CrudApi.myShareCode,
+      );
+      if (mounted) setState(() => _shareCode = code);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userErrorText('Không tải được mã chia sẻ', error)),
+        ),
+      );
+    }
+  }
+
+  void _copyShareCode() {
+    final code = _shareCode;
+    if (code == null) return;
+    Clipboard.setData(ClipboardData(text: code));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Đã sao chép mã chia sẻ')));
+  }
 
   void _onVersionTap() {
     final access = DeveloperAccessController.instance;
@@ -139,13 +177,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     SizedBox(height: 10),
                     const _KvRow(left: 'Ngôn ngữ', right: 'Tiếng Việt'),
                     SizedBox(height: 10),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Hỗ trợ · 0963657345',
-                        style: AppTextStyles.caption,
-                      ),
-                    ),
+                    const _KvRow(left: 'Hỗ trợ', right: '0963657345'),
                   ],
                 ),
               ),
@@ -153,7 +185,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const Text('Tài khoản', style: AppTextStyles.sectionTitle),
               const SizedBox(height: 12),
               AppCard(
-                child: _KvRow(left: 'Đăng nhập Google', right: _accountEmail),
+                child: Column(
+                  children: [
+                    _KvRow(left: 'Đăng nhập Google', right: _accountEmail),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Mã chia sẻ',
+                            style: AppTextStyles.bodySecondary,
+                          ),
+                        ),
+                        Text(
+                          _shareCode ?? '...',
+                          style: AppTextStyles.bodyMedium,
+                        ),
+                        const SizedBox(width: 4),
+                        InkWell(
+                          onTap: _shareCode == null ? null : _copyShareCode,
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(
+                              Icons.copy_rounded,
+                              size: 18,
+                              color: _shareCode == null
+                                  ? AppColors.textSecondary.withOpacity(0.5)
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                    ),
+                  ],
+                ),
               ),
               if (DeveloperAccessController.instance.hasAccess) ...[
                 const SizedBox(height: 12),
