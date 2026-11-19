@@ -228,6 +228,7 @@ class CrudApi {
         () => _send(operation, table, values: values, match: match, when: when),
       );
     }
+    final group = _group!;
     final request = <String, Object?>{
       'operation': operation,
       'table': table,
@@ -264,7 +265,7 @@ class CrudApi {
       '[CRUD] ${entry.title} | $when\n${entry.requestJson}\n'
       '${error != null ? 'LỖI: $error' : 'Phản hồi: ${entry.responseJson}'}',
     );
-    _group!.entries.add(entry);
+    group.entries.add(entry);
     if (error != null) throw CrudException(error);
     return rows;
   }
@@ -277,6 +278,9 @@ class CrudApi {
     if (_group == null) {
       return run(when, () => _rpc(function, params, when: when));
     }
+    // Concurrent calls share a group that the first finisher clears, so keep
+    // our own reference across the await.
+    final group = _group!;
     Object? result;
     String? error;
     try {
@@ -301,7 +305,7 @@ class CrudApi {
       '[CRUD] ${entry.title} | $when\n${entry.requestJson}\n'
       '${error != null ? 'LỖI: $error' : 'Phản hồi: ${entry.responseJson}'}',
     );
-    _group!.entries.add(entry);
+    group.entries.add(entry);
     if (error != null) throw CrudException(error);
     return result;
   }

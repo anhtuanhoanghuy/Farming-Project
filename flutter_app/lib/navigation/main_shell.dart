@@ -25,11 +25,19 @@ class MainShell extends StatefulWidget {
 
   final int initialIndex;
 
+  /// True while the Settings tab is showing; it has nothing to do with devices.
+  static bool get isSettingsTabActive => _MainShellState._active?._index == 2;
+
+  /// Closes every device page and switches to the Devices tab.
+  static void showDeviceList() => _MainShellState._active?._resetToDeviceList();
+
   @override
   State<MainShell> createState() => _MainShellState();
 }
 
 class _MainShellState extends State<MainShell> {
+  static _MainShellState? _active;
+
   late int _index;
   final _deviceKey = GlobalKey<NavigatorState>();
   final _diagKey = GlobalKey<NavigatorState>();
@@ -41,6 +49,7 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
     _index = widget.initialIndex;
+    _active = this;
     // Listen before MQTT connects so the retained presence messages are seen.
     DevicePresence.instance.start();
     DeviceHealth.instance.start();
@@ -90,6 +99,11 @@ class _MainShellState extends State<MainShell> {
     _diagKey.currentState?.popUntil((route) => route.isFirst);
   }
 
+  void _resetToDeviceList() {
+    _closeDevicePages();
+    if (_index != 0) setState(() => _index = 0);
+  }
+
   Future<void> _onMqttTap() async {
     try {
       final activated = await AdminAccessController.instance.tap();
@@ -122,6 +136,7 @@ class _MainShellState extends State<MainShell> {
 
   @override
   void dispose() {
+    if (identical(_active, this)) _active = null;
     DeveloperAccessController.instance.removeListener(_onDeveloperChanged);
     _authSubscription?.cancel();
     super.dispose();

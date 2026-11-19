@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../navigation/main_shell.dart';
 import '../services/crud_api.dart';
 import 'device_access_watcher.dart';
 
@@ -46,6 +47,9 @@ class DeviceAccessRevokeNotifier {
 
     _notifiedDevices.add(deviceId);
 
+    // Settings has nothing to do with devices: no popup, no navigation.
+    if (MainShell.isSettingsTabActive) return;
+
     // Show popup via global key
     _showRevokePopup(deviceId);
   }
@@ -73,28 +77,15 @@ class DeviceAccessRevokeNotifier {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.of(ctx).pop(); // Close dialog
-              _notifiedDevices.remove(deviceId); // Clear so it can show again if user navigates back
-              _navigateToDeviceList();
+              Navigator.of(ctx).pop();
+              _notifiedDevices.remove(deviceId);
+              MainShell.showDeviceList();
             },
             child: const Text('Đóng'),
           ),
         ],
       ),
     );
-  }
-
-  void _navigateToDeviceList() {
-    final navState = appNavigatorKey.currentState;
-    if (navState == null) return;
-
-    debugPrint('[DeviceAccessRevokeNotifier] Navigating to device list');
-    
-    // Pop all routes until we're at root, then navigate to device list
-    // This handles navigation from any device-related screen back to device list
-    while (navState.canPop()) {
-      navState.pop();
-    }
   }
 
   void stop() {
