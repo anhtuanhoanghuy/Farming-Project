@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -434,9 +435,23 @@ class CrudApi {
   }
 
   /// Owner or admin revokes a guest's access by `device_shares.id`.
-  /// Sets status to 'revoke_waiting' and waits for guest confirmation.
-  static Future<void> revokeShare(String shareId) =>
-      _rpc('revoke_share', {'p_share_id': shareId}, when: 'thu hồi chia sẻ');
+  /// Sets status to 'revoke_waiting' and waits for guest confirmation; if the
+  /// guest has not confirmed after [revokeConfirmTimeout] the share is deleted.
+  static const revokeConfirmTimeout = Duration(seconds: 10);
+
+  static Future<void> revokeShare(String shareId) async {
+    await _rpc('revoke_share', {'p_share_id': shareId}, when: 'thu hồi chia sẻ');
+    Timer(revokeConfirmTimeout, () => unawaited(_forceDeleteRevoke(shareId)));
+  }
+
+  static Future<void> _forceDeleteRevoke(String shareId) async {
+    try {
+      await _db.rpc('force_delete_revoke_share', params: {'p_share_id': shareId});
+      debugPrint('[CRUD] Đã xóa chia sẻ $shareId sau ${revokeConfirmTimeout.inSeconds}s');
+    } catch (e) {
+      debugPrint('[CRUD] Không xóa được chia sẻ $shareId sau timeout: $e');
+    }
+  }
 
   /// Guest confirms they received revoke request.
   /// Updates status from 'revoke_waiting' to 'revoked'.
