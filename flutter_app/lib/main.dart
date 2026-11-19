@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'navigation/app_routes.dart';
 import 'services/crud_api.dart';
 import 'services/guest_revoke_watcher.dart';
+import 'services/device_access_revoke_notifier.dart';
 import 'state/developer_access_controller.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
@@ -20,9 +21,10 @@ Future<void> main() async {
     ),
   );
 
-  // Start global guest revoke watcher after app initializes
+  // Start global watchers after app initializes
   Future.delayed(const Duration(milliseconds: 500), () {
     GuestRevokeWatcher.instance.start();
+    DeviceAccessRevokeNotifier.instance.start();
   });
 
   runApp(const SenseConnectApp());
