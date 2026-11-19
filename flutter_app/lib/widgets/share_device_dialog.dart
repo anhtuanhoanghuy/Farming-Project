@@ -30,6 +30,7 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
   final _codeController = TextEditingController();
   Future<List<Map<String, dynamic>>>? _sharesFuture;
   StreamSubscription<List<Map<String, dynamic>>>? _sharesSub;
+  StreamSubscription<String>? _timeoutSub;
   bool _sharesSeeded = false;
   // Shares revoked from this dialog; kept so they show "Đã thu hồi" after the server deletes them.
   final Map<String, Map<String, dynamic>> _revokedShares = {};
@@ -44,7 +45,9 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
   void initState() {
     super.initState();
     _loadShares();
-    try {
+    _timeoutSub = CrudApi.revokeTimedOut.listen((_) {
+      if (mounted) setState(_loadShares);
+    });
       _sharesSub = CrudApi.shareChanges('owner_id', CrudApi.userId).listen(
         (shares) {
           if (!_sharesSeeded) {
@@ -77,6 +80,7 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
   @override
   void dispose() {
     _sharesSub?.cancel();
+    _timeoutSub?.cancel();
     _codeController.dispose();
     super.dispose();
   }

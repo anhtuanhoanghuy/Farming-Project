@@ -439,6 +439,10 @@ class CrudApi {
   /// guest has not confirmed after [revokeConfirmTimeout] the share is deleted.
   static const revokeConfirmTimeout = Duration(seconds: 3);
 
+  /// Emits a share id once the timeout path has finished deleting it.
+  static final _revokeTimedOut = StreamController<String>.broadcast();
+  static Stream<String> get revokeTimedOut => _revokeTimedOut.stream;
+
   static Future<void> revokeShare(String shareId) async {
     await _rpc('revoke_share', {'p_share_id': shareId}, when: 'thu hồi chia sẻ');
     Timer(revokeConfirmTimeout, () => unawaited(_forceDeleteRevoke(shareId)));
@@ -448,6 +452,7 @@ class CrudApi {
     try {
       await _db.rpc('force_delete_revoke_share', params: {'p_share_id': shareId});
       debugPrint('[CRUD] Đã xóa chia sẻ $shareId sau ${revokeConfirmTimeout.inSeconds}s');
+      _revokeTimedOut.add(shareId);
     } catch (e) {
       debugPrint('[CRUD] Không xóa được chia sẻ $shareId sau timeout: $e');
     }
