@@ -56,16 +56,12 @@ class _ConsoleScreenState extends State<ConsoleScreen> {
   String get _deviceId => widget.args?.deviceId ?? '';
   String get _name => widget.args?.name ?? _deviceId;
 
-  late final ShareRevokeListener _revokeListener = ShareRevokeListener(context, _deviceId);
-
   @override
   void initState() {
     super.initState();
     DevicePresence.instance.start();
-    // Listen for share revoke events
+    // Check access on entry
     if (_deviceId.isNotEmpty) {
-      _revokeListener.start();
-      // Check access on entry
       debugPrint('[ConsoleScreen] Checking access on entry for device: $_deviceId');
       unawaited(DeviceAccessWatcher.instance.checkAccessNow());
     }
@@ -74,7 +70,6 @@ class _ConsoleScreenState extends State<ConsoleScreen> {
   @override
   void dispose() {
     _scroll.dispose();
-    _revokeListener.dispose();
     super.dispose();
   }
 

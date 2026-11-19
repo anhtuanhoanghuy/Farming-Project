@@ -1,0 +1,57 @@
+🔧 FIX REVOKE DETECTION - SQL UPDATE REQUIRED
+
+CURRENT ISSUE:
+- App log shows: "LỖI: channel name too long (code 22023)"
+- This means OLD trigger with long channel name is still running in Supabase
+- Need to update trigger to use SHORT channel name
+
+STEPS TO FIX:
+
+1. Go to Supabase Dashboard:
+   https://supabase.com/dashboard/project/your-project-ref/editor
+
+2. SQL Editor → New Query
+
+3. Copy and run this code:
+   
+   ---START SQL---
+   -- Update broadcast_share_removed function to use short channel name
+   
+   create or replace function public.broadcast_share_removed()
+   returns trigger as $$
+   begin
+     if TG_OP = 'DELETE' then
+       -- Use short channel name to stay under 63 char limit
+       perform pg_notify(
+         'share_removed',
+         json_build_object(
+           'guest_id', old.guest_id,
+           'device_id', old.device_id,
+           'share_id', old.id
+         )::text
+       );
+     end if;
+     return old;
+   end;
+   $$ language plpgsql;
+   
+   drop trigger if exists device_shares_broadcast_removed on public.device_shares;
+   create trigger device_shares_broadcast_removed
+     after delete on public.device_shares
+     for each row execute function public.broadcast_share_removed();
+   ---END SQL---
+
+4. Click "Run" (Ctrl+Enter)
+
+5. Test revoke on app - should NOT see "channel name too long" error anymore
+
+✅ AFTER RUNNING THIS SQL, REVOKE DETECTION WILL WORK!
+
+---
+
+WHY THIS FIXES IT:
+
+Old trigger: 'realtime:user:' || guest_id || ':device_shares' = 60+ chars → ERROR
+New trigger: 'share_removed' = 13 chars → OK ✓
+
+App now listens 'share_removed' channel and filters by guest_id in payload.

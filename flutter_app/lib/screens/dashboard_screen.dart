@@ -46,7 +46,11 @@ class _DashboardScreenState extends State<DashboardScreen>
   int _tab = 0;
   late String _name = widget.device.name;
   StreamSubscription<String>? _transferSubscription;
-  late final ShareRevokeListener _revokeListener = ShareRevokeListener(context, widget.device.deviceId);
+  late final ShareRevokeListener _revokeListener = ShareRevokeListener(
+    context,
+    widget.device.deviceId,
+    tabIndex: 0, // Go to Devices tab
+  );
 
   @override
   void initState() {

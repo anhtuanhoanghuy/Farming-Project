@@ -18,6 +18,7 @@ import '../theme/app_text_styles.dart';
 import '../widgets/app_buttons.dart';
 import '../widgets/app_card.dart';
 import '../widgets/screen_scaffold.dart';
+import '../widgets/share_revoke_detector.dart';
 import '../widgets/status_chip.dart';
 
 class DeviceListScreen extends StatefulWidget {
@@ -33,47 +34,60 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   final _repository = DeviceRepository.instance;
   List<Map<String, dynamic>> _invitations = [];
   bool _invitationsExpanded = false;
-  StreamSubscription<List<Map<String, dynamic>>>? _sharesSub;
-  bool _sharesSeeded = false;
+  StreamSubscription<List<Map<String, dynamic>>>? _guestSharesSub;
+  StreamSubscription<List<Map<String, dynamic>>>? _ownerSharesSub;
 
   @override
   void initState() {
     super.initState();
     DevicePresence.instance.start();
     DeviceHealth.instance.start();
+    
     // Load devices first
-    _repository.refresh().whenComplete(() {
-      // Then load invitations after devices are ready
+    _repository.refresh().then((_) {
       if (mounted) unawaited(_loadInvitations());
+    }).catchError((e) {
+      debugPrint('[DeviceList] Initial refresh failed: $e');
     });
-    // Listen for real-time invitation updates
+    
+    // Stream 1: Shares where user is GUEST (someone shared to them)
     try {
-      _sharesSub = CrudApi.shareChanges('guest_id', CrudApi.userId).listen(
-        (event) {
-          // Skip first event (initial snapshot, already loaded in initState)
-          if (!_sharesSeeded) {
-            _sharesSeeded = true;
-            return;
-          }
-          // On subsequent events, reload invitations and device list
-          if (mounted) {
-            unawaited(_loadInvitations());
-            unawaited(_repository.refresh());
-          }
+      _guestSharesSub = CrudApi.shareChanges('guest_id', CrudApi.userId).listen(
+        (_) {
+          debugPrint('[DeviceList] Guest shares changed');
+          if (mounted) unawaited(_loadInvitations());
         },
         onError: (e) {
-          debugPrint('[Invitations] Stream error: $e');
+          debugPrint('[DeviceList] Guest stream error: $e');
         },
         cancelOnError: false,
       );
     } catch (e) {
-      debugPrint('[Invitations] Subscribe error: $e');
+      debugPrint('[DeviceList] Guest stream error: $e');
+    }
+    
+    // Stream 2: Shares where user is OWNER (they shared to others)
+    // This catches revoke status changes
+    try {
+      _ownerSharesSub = CrudApi.shareChanges('owner_id', CrudApi.userId).listen(
+        (_) {
+          debugPrint('[DeviceList] Owner shares changed');
+          if (mounted) unawaited(_loadInvitations());
+        },
+        onError: (e) {
+          debugPrint('[DeviceList] Owner stream error: $e');
+        },
+        cancelOnError: false,
+      );
+    } catch (e) {
+      debugPrint('[DeviceList] Owner stream error: $e');
     }
   }
 
   @override
   void dispose() {
-    _sharesSub?.cancel();
+    _guestSharesSub?.cancel();
+    _ownerSharesSub?.cancel();
     super.dispose();
   }
 
@@ -105,8 +119,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         accept ? 'Chấp nhận lời mời chia sẻ' : 'Từ chối lời mời chia sẻ',
         () => CrudApi.respondShare(shareId, accept),
       );
-      await _loadInvitations();
-      await _repository.refresh();
+      // Real-time subscription handles reload automatically
     } catch (error) {
       messenger.showSnackBar(
         SnackBar(

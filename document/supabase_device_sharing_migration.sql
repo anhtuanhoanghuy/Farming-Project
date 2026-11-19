@@ -433,7 +433,8 @@ begin
     raise exception 'Not authorized to revoke this share' using errcode = '42501';
   end if;
 
-  delete from public.device_shares where id = p_share_id;
+  -- Update status to 'revoke_waiting' and wait for guest to confirm
+  update public.device_shares set status = 'revoke_waiting' where id = p_share_id;
 end;
 $$;
 

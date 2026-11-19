@@ -52,7 +52,6 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
             : '1'),
   );
   late final _name = TextEditingController(text: widget.selection.name);
-  late final ShareRevokeListener _revokeListener = ShareRevokeListener(context, widget.selection.device.deviceId);
 
   /// A sensor already on its port keeps its type and port; only a new one
   /// can choose them.
@@ -61,8 +60,6 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
   @override
   void initState() {
     super.initState();
-    // Listen for share revoke events
-    _revokeListener.start();
     // Check access on entry
     debugPrint('[SensorConfigScreen] Checking access on entry for device: ${widget.selection.device.deviceId}');
     unawaited(DeviceAccessWatcher.instance.checkAccessNow());
@@ -72,7 +69,6 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
   void dispose() {
     _slave.dispose();
     _name.dispose();
-    _revokeListener.dispose();
     super.dispose();
   }
 

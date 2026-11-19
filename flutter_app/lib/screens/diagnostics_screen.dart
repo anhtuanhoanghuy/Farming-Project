@@ -84,12 +84,17 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
     super.initState();
     DevicePresence.instance.start();
     DeviceHealth.instance.start();
-    unawaited(_repository.refresh());
+    // Initial load
+    _repository.refresh().then((_) {
+      debugPrint('[Diagnostics] Initial device load complete');
+    }).catchError((e) {
+      debugPrint('[Diagnostics] Initial device load failed: $e');
+    });
   }
 
   void _openDevice(DeviceRecord device) {
     unawaited(DeviceHealth.instance.load(device.macAddress));
-    // The state shown below is the one of the attached device.
+    // Attach device before navigating
     if (DeviceState.instance.deviceId != device.macAddress) {
       unawaited(LoadSync.instance.attach(device.macAddress));
     } else {
@@ -108,15 +113,20 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ScreenScaffold(
-      showMore: false,
-      title: 'Chẩn đoán',
-      showBack: widget.showBack,
-      leadingIcon: Icons.show_chart,
-      embedInTab: widget.inShell,
-      navIndex: widget.inShell ? null : 1,
-      onNavTap: widget.inShell ? null : (i) => AppRoutes.openTab(context, i),
-      body: _DeviceList(repository: _repository, onSelect: _openDevice),
+    return ListenableBuilder(
+      listenable: _repository,
+      builder: (context, _) {
+        return ScreenScaffold(
+          showMore: false,
+          title: 'Chẩn đoán',
+          showBack: widget.showBack,
+          leadingIcon: Icons.show_chart,
+          embedInTab: widget.inShell,
+          navIndex: widget.inShell ? null : 1,
+          onNavTap: widget.inShell ? null : (i) => AppRoutes.openTab(context, i),
+          body: _DeviceList(repository: _repository, onSelect: _openDevice),
+        );
+      },
     );
   }
 }
@@ -138,10 +148,18 @@ class _DeviceDiagnosticsScreen extends StatefulWidget {
 }
 
 class _DeviceDiagnosticsScreenState extends State<_DeviceDiagnosticsScreen> {
+  late final ShareRevokeListener _revokeListener = ShareRevokeListener(
+    context,
+    widget.device.macAddress,
+    tabIndex: 1, // Go to Diagnostics tab
+  );
+
   @override
   void initState() {
     super.initState();
     widget.repository.addListener(_onDevicesChanged);
+    // Listen for share revoke events
+    _revokeListener.start();
     // Check access on entry
     debugPrint('[DiagnosticsScreen] Checking access on entry for device: ${widget.device.macAddress}');
     unawaited(DeviceAccessWatcher.instance.checkAccessNow());
@@ -150,6 +168,7 @@ class _DeviceDiagnosticsScreenState extends State<_DeviceDiagnosticsScreen> {
   @override
   void dispose() {
     widget.repository.removeListener(_onDevicesChanged);
+    _revokeListener.dispose();
     super.dispose();
   }
 

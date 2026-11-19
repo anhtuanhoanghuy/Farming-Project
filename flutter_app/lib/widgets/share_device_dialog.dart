@@ -44,15 +44,28 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
     _loadShares();
     try {
       _sharesSub = CrudApi.shareChanges('owner_id', CrudApi.userId).listen(
-        (_) {
-          // The first event is the initial snapshot, already covered above.
+        (shares) {
           if (!_sharesSeeded) {
             _sharesSeeded = true;
             return;
           }
-          if (mounted) setState(_loadShares);
+          if (mounted) {
+            // On any change, reload shares
+            setState(_loadShares);
+            
+            // Also auto-delete any shares in 'revoked' or 'declined' status (silent, no reload)
+            for (final share in shares) {
+              final status = share['status'] as String?;
+              final shareId = share['id'] as String?;
+              if ((status == 'revoked' || status == 'declined') && shareId != null) {
+                _silentDeleteShare(shareId);
+              }
+            }
+          }
         },
-        onError: (_) {},
+        onError: (e) {
+          debugPrint('[ShareDeviceDialog] Stream error: $e');
+        },
       );
     } catch (e) {
       debugPrint('[ShareDeviceDialog] Error subscribing to share changes: $e');
@@ -146,9 +159,19 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
     }
   }
 
+  Future<void> _silentDeleteShare(String shareId) async {
+    try {
+      await CrudApi.deleteRevokedShare(shareId);
+    } catch (e) {
+      debugPrint('[ShareDeviceDialog] Silent delete failed: $e');
+    }
+  }
+
   static String _statusLabel(String status) => switch (status) {
     'accepted' => 'Đã chấp nhận',
     'declined' => 'Đã từ chối',
+    'revoke_waiting' => 'Đang chờ xác nhận thu hồi',
+    'revoked' => 'Đã thu hồi',
     _ => 'Đang chờ',
   };
 

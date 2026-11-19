@@ -36,13 +36,9 @@ class SensorCapacityScreen extends StatefulWidget {
 }
 
 class _SensorCapacityScreenState extends State<SensorCapacityScreen> {
-  late final ShareRevokeListener _revokeListener = ShareRevokeListener(context, widget.device.deviceId);
-
   @override
   void initState() {
     super.initState();
-    // Listen for share revoke events
-    _revokeListener.start();
     // Check access on entry
     debugPrint('[SensorCapacityScreen] Checking access on entry for device: ${widget.device.deviceId}');
     unawaited(DeviceAccessWatcher.instance.checkAccessNow());
@@ -50,7 +46,6 @@ class _SensorCapacityScreenState extends State<SensorCapacityScreen> {
 
   @override
   void dispose() {
-    _revokeListener.dispose();
     super.dispose();
   }
 

@@ -430,8 +430,19 @@ class CrudApi {
   }
 
   /// Owner or admin revokes a guest's access by `device_shares.id`.
+  /// Sets status to 'revoke_waiting' and waits for guest confirmation.
   static Future<void> revokeShare(String shareId) =>
       _rpc('revoke_share', {'p_share_id': shareId}, when: 'thu hồi chia sẻ');
+
+  /// Guest confirms they received revoke notification (after showing popup).
+  /// Updates status from 'revoke_waiting' to 'revoked'.
+  static Future<void> confirmRevoke(String shareId) =>
+      _rpc('confirm_revoke', {'p_share_id': shareId}, when: 'xác nhận bị thu hồi');
+
+  /// Host deletes a revoked share after guest confirmed.
+  /// Can only delete if status is 'revoked'.
+  static Future<void> deleteRevokedShare(String shareId) =>
+      _rpc('delete_revoked_share', {'p_share_id': shareId}, when: 'xóa chia sẻ đã thu hồi');
 
   /// Invitations sent to the signed-in account, any status.
   static Future<List<Map<String, dynamic>>> listMyInvitations() async {
@@ -448,6 +459,10 @@ class CrudApi {
     {'p_share_id': shareId, 'p_accept': accept},
     when: accept ? 'đồng ý lời mời chia sẻ' : 'từ chối lời mời chia sẻ',
   );
+
+  /// Guest removes themself from a device shared with them (self-remove).
+  static Future<void> guestRemoveShare(String shareId) =>
+      _rpc('guest_remove_share', {'p_share_id': shareId}, when: 'rời khỏi chia sẻ');
 
   /// Guest removes themself from a device shared with them.
   static Future<void> leaveSharedDevice(String deviceId) => _rpc(
