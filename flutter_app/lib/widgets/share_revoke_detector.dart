@@ -7,15 +7,24 @@ import '../services/device_access_watcher.dart';
 /// Helper to detect when a device share is revoked or ownership is lost for a user.
 /// Listens to global DeviceAccessWatcher for efficiency.
 class ShareRevokeListener {
-  ShareRevokeListener(this.context, this.deviceId);
+  ShareRevokeListener(
+    this.context,
+    this.deviceId, {
+    this.popCount = 1,
+  });
 
   final BuildContext context;
   final String deviceId;
+  
+  /// Number of screens to pop when device is revoked (default: 1 to pop to parent)
+  /// For Console from Diagnostics: use 2 (pop Console → pop _DeviceDiagnosticsScreen → reach DiagnosticsScreen)
+  final int popCount;
+  
   StreamSubscription<String>? _subscription;
 
   /// Start listening for share revoke and ownership loss events.
   void start() {
-    debugPrint('[ShareRevokeListener] Starting for device: $deviceId');
+    debugPrint('[ShareRevokeListener] Starting for device: $deviceId (will pop $popCount times)');
     DeviceAccessWatcher.instance.start();
     try {
       _subscription = DeviceAccessWatcher.instance.revoked.listen(
@@ -23,7 +32,7 @@ class ShareRevokeListener {
           debugPrint('[ShareRevokeListener] Received revoke event for: $revokedDeviceId (listening for: $deviceId)');
           if (revokedDeviceId == deviceId) {
             debugPrint('[ShareRevokeListener] ⚠️  MATCH! Device revoked: $deviceId');
-            _onRevoked();
+            _showRevokeDialog();
           } else {
             debugPrint('[ShareRevokeListener] No match - ignoring event');
           }
@@ -38,8 +47,8 @@ class ShareRevokeListener {
     }
   }
 
-  void _onRevoked() {
-    debugPrint('[ShareRevokeListener] 📱 Executing _onRevoked for $deviceId');
+  void _showRevokeDialog() {
+    debugPrint('[ShareRevokeListener] 📱 Showing revoke dialog for $deviceId');
     if (!context.mounted) {
       debugPrint('[ShareRevokeListener] Context not mounted, skipping');
       return;
@@ -56,19 +65,26 @@ class ShareRevokeListener {
         actions: [
           TextButton(
             onPressed: () {
-              debugPrint('[ShareRevokeListener] Dialog dismissed - popping to first route');
+              debugPrint('[ShareRevokeListener] Dialog dismissed - closing and popping');
               Navigator.of(ctx).pop(); // Close dialog
-              // Pop back to device list (first route in the navigator)
-              Navigator.of(context).popUntil((route) {
-                debugPrint('[ShareRevokeListener] Checking route: ${route.settings.name}');
-                return route.isFirst;
-              });
+              _performPopAction();
             },
             child: const Text('Đóng'),
           ),
         ],
       ),
     );
+  }
+
+  void _performPopAction() {
+    debugPrint('[ShareRevokeListener] Performing pop action ($popCount times)');
+    if (!context.mounted) return;
+    
+    // Pop multiple times if needed
+    for (int i = 0; i < popCount && Navigator.of(context).canPop(); i++) {
+      debugPrint('[ShareRevokeListener] Popping... ${i + 1}/$popCount');
+      Navigator.of(context).pop();
+    }
   }
 
   /// Stop listening for share revoke and ownership loss events.
