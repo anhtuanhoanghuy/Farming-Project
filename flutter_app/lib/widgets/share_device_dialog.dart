@@ -31,6 +31,8 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
   Future<List<Map<String, dynamic>>>? _sharesFuture;
   StreamSubscription<List<Map<String, dynamic>>>? _sharesSub;
   bool _sharesSeeded = false;
+  // Shares revoked from this dialog; kept so they show "Đã thu hồi" after the server deletes them.
+  final Map<String, Map<String, dynamic>> _revokedShares = {};
 
   Map<String, dynamic>? _found;
   bool _checked = false;
@@ -143,7 +145,8 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
     }
   }
 
-  Future<void> _revoke(String shareId) async {
+  Future<void> _revoke(Map<String, dynamic> share) async {
+    final shareId = share['share_id'] as String;
     final messenger = ScaffoldMessenger.of(context);
     try {
       await CrudApi.run(
@@ -151,6 +154,7 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
         () => CrudApi.revokeShare(shareId),
       );
       if (!mounted) return;
+      _revokedShares[shareId] = share;
       setState(_loadShares);
     } catch (error) {
       messenger.showSnackBar(
@@ -275,7 +279,16 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
                       ),
                     );
                   }
-                  final shares = snapshot.data ?? const [];
+                  final serverShares = snapshot.data ?? const [];
+                  final serverIds = {
+                    for (final s in serverShares) s['share_id'],
+                  };
+                  final shares = [
+                    ...serverShares,
+                    for (final entry in _revokedShares.entries)
+                      if (!serverIds.contains(entry.key))
+                        {...entry.value, 'status': 'revoked'},
+                  ];
                   if (shares.isEmpty) {
                     return const Text(
                       'Chưa chia sẻ với ai.',
@@ -314,16 +327,16 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
                                   ],
                                 ),
                               ),
-                              TextButton(
-                                onPressed: () =>
-                                    _revoke(share['share_id'] as String),
-                                child: Text(
-                                  'Thu hồi',
-                                  style: AppTextStyles.link.copyWith(
-                                    color: AppColors.errorText,
+                              if (share['status'] != 'revoked')
+                                TextButton(
+                                  onPressed: () => _revoke(share),
+                                  child: Text(
+                                    'Thu hồi',
+                                    style: AppTextStyles.link.copyWith(
+                                      color: AppColors.errorText,
+                                    ),
                                   ),
                                 ),
-                              ),
                             ],
                           ),
                         ),
