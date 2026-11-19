@@ -34,7 +34,6 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   final _repository = DeviceRepository.instance;
   List<Map<String, dynamic>> _invitations = [];
   bool _invitationsExpanded = false;
-  final Set<String> _revokedSharesNotified = {}; // Track already notified revokes
   StreamSubscription<List<Map<String, dynamic>>>? _guestSharesSub;
   StreamSubscription<List<Map<String, dynamic>>>? _ownerSharesSub;
 
@@ -54,22 +53,8 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     // Stream 1: Shares where user is GUEST (someone shared to them)
     try {
       _guestSharesSub = CrudApi.shareChanges('guest_id', CrudApi.userId).listen(
-        (shares) {
+        (_) {
           debugPrint('[DeviceList] Guest shares changed');
-          
-          // Check for revoked status to show notification
-          for (final share in shares) {
-            final shareId = share['id'] as String?;
-            final deviceName = share['device_name'] as String?;
-            final status = share['status'] as String?;
-            
-            if (shareId != null && status == 'revoked' && !_revokedSharesNotified.contains(shareId)) {
-              _revokedSharesNotified.add(shareId);
-              debugPrint('[DeviceList] 🔔 Share revoked: $deviceName');
-              _showRevokeNotification(deviceName ?? 'thiết bị');
-            }
-          }
-          
           if (mounted) unawaited(_loadInvitations());
         },
         onError: (e) {
@@ -142,24 +127,6 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         ),
       );
     }
-  }
-
-  void _showRevokeNotification(String deviceName) {
-    if (!mounted) return;
-    
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Thiết bị đã bị thu hồi'),
-        content: Text('Chủ sở hữu đã thu hồi quyền truy cập đến "$deviceName".'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Đóng'),
-          ),
-        ],
-      ),
-    );
   }
 
   /// Pull-to-refresh: reloads the devices with a CRUD `SELECT`, shown in the
