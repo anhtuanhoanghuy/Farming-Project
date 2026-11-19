@@ -42,13 +42,21 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     DevicePresence.instance.start();
     DeviceHealth.instance.start();
     
-    // Load devices first
+    // Load devices first, then start share streams
     _repository.refresh().then((_) {
-      if (mounted) unawaited(_loadInvitations());
+      if (mounted) {
+        unawaited(_loadInvitations());
+        _startShareStreams(); // Start streams after devices load
+      }
     }).catchError((e) {
       debugPrint('[DeviceList] Initial refresh failed: $e');
+      if (mounted) {
+        _startShareStreams(); // Start streams even if device load fails
+      }
     });
-    
+  }
+
+  void _startShareStreams() {
     // Stream 1: Shares where user is GUEST (someone shared to them)
     try {
       _guestSharesSub = CrudApi.shareChanges('guest_id', CrudApi.userId).listen(
@@ -103,6 +111,8 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
       if (mounted) setState(() => _invitations = pending);
     } catch (error) {
       if (!mounted) return;
+      final context = this.context;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(userErrorText('Không tải được lời mời chia sẻ', error)),
