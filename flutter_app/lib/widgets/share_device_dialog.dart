@@ -37,8 +37,9 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
   StreamSubscription<List<Map<String, dynamic>>>? _sharesSub;
   StreamSubscription<String>? _timeoutSub;
   bool _sharesSeeded = false;
-  // Shares revoked from this dialog; kept so they show "Đã thu hồi" after the server deletes them.
-  final Map<String, Map<String, dynamic>> _revokedShares = {};
+  // Shares removed on the server (revoked/declined) but still shown in this dialog.
+  final Map<String, Map<String, dynamic>> _removedShares = {};
+  List<Map<String, dynamic>> _lastShares = const [];
 
   Map<String, dynamic>? _found;
   bool _checked = false;
@@ -61,6 +62,21 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
             return;
           }
           if (mounted) {
+            // Remember declined shares of this device so they stay visible after the silent delete.
+            for (final share in shares) {
+              if (share['status'] == 'declined' &&
+                  share['device_id'] == widget.deviceId) {
+                final known = _lastShares.where(
+                  (s) => s['share_id'] == share['id'],
+                );
+                if (known.isNotEmpty) {
+                  _removedShares[share['id'] as String] = {
+                    ...known.first,
+                    'status': 'declined',
+                  };
+                }
+              }
+            }
             // On any change, reload shares
             setState(_loadShares);
             
@@ -96,6 +112,7 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
       'Mở hộp thoại chia sẻ thiết bị "${widget.deviceName}"',
       () => CrudApi.listDeviceShares(widget.deviceId),
     ).then((shares) {
+      _lastShares = shares;
       final count = shares
           .where((s) => _activeStatuses.contains(s['status']))
           .length;
@@ -172,7 +189,7 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
         () => CrudApi.revokeShare(shareId),
       );
       if (!mounted) return;
-      _revokedShares[shareId] = share;
+      _removedShares[shareId] = {...share, 'status': 'revoked'};
       setState(_loadShares);
     } catch (error) {
       messenger.showSnackBar(
@@ -311,9 +328,9 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
                   };
                   final shares = [
                     ...serverShares,
-                    for (final entry in _revokedShares.entries)
+                    for (final entry in _removedShares.entries)
                       if (!serverIds.contains(entry.key))
-                        {...entry.value, 'status': 'revoked'},
+                        {...entry.value, '_removed': true},
                   ];
                   if (shares.isEmpty) {
                     return const Text(
@@ -353,7 +370,8 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
                                   ],
                                 ),
                               ),
-                              if (share['status'] != 'revoked')
+                              if (share['_removed'] != true &&
+                                  share['status'] != 'revoked')
                                 TextButton(
                                   onPressed: () => _revoke(share),
                                   child: Text(
