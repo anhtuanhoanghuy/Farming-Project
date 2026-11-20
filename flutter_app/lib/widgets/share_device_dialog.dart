@@ -26,6 +26,11 @@ class ShareDeviceDialog extends StatefulWidget {
 
 class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
   static const _codeLength = 8;
+  static const _maxActiveShares = 5;
+  static const _activeStatuses = {'pending', 'accepted', 'revoke_waiting'};
+
+  int _activeShareCount = 0;
+  bool get _limitReached => _activeShareCount >= _maxActiveShares;
 
   final _codeController = TextEditingController();
   Future<List<Map<String, dynamic>>>? _sharesFuture;
@@ -90,7 +95,15 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
     _sharesFuture = CrudApi.run(
       'Mở hộp thoại chia sẻ thiết bị "${widget.deviceName}"',
       () => CrudApi.listDeviceShares(widget.deviceId),
-    );
+    ).then((shares) {
+      final count = shares
+          .where((s) => _activeStatuses.contains(s['status']))
+          .length;
+      if (mounted && count != _activeShareCount) {
+        setState(() => _activeShareCount = count);
+      }
+      return shares;
+    });
   }
 
   Future<void> _checkCode() async {
@@ -250,8 +263,16 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: (_found != null && !_sending) ? _sendInvite : null,
-                  child: Text(_sending ? 'Đang gửi...' : 'Gửi lời mời'),
+                  onPressed: (_found != null && !_sending && !_limitReached)
+                      ? _sendInvite
+                      : null,
+                  child: Text(
+                    _limitReached
+                        ? 'Vượt quá số lượng lời mời'
+                        : _sending
+                        ? 'Đang gửi...'
+                        : 'Gửi lời mời',
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
