@@ -65,7 +65,7 @@ $builtApk = Join-Path $appDir 'build\app\outputs\flutter-apk\app-release.apk'
 if (-not (Test-Path $builtApk)) { throw "APK not found: $builtApk" }
 
 $sha = (Get-FileHash $builtApk -Algorithm SHA256).Hash.ToLower()
-$fileName = "sense_connect_v${name}_$sha.apk"
+$fileName = "sense_connect_v${name}_$($sha.Substring(0, 8)).apk"
 New-Item -ItemType Directory -Force $outDir | Out-Null
 $finalApk = Join-Path $outDir $fileName
 Copy-Item $builtApk $finalApk -Force
