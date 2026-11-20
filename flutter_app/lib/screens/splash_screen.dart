@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 
 import '../core/app_config.dart';
 import '../navigation/app_routes.dart';
+import '../services/app_update_service.dart';
 import '../services/auth_service.dart';
 import '../services/device_access_watcher.dart';
+import '../widgets/force_update_dialog.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -34,6 +36,8 @@ class _SplashScreenState extends State<SplashScreen> {
       signedIn = false;
     }
     if (!mounted) return;
+    await _enforceUpdate();
+    if (!mounted) return;
     // Start watching for device access changes if signed in
     if (signedIn) {
       DeviceAccessWatcher.instance.start();
@@ -41,6 +45,22 @@ class _SplashScreenState extends State<SplashScreen> {
     Navigator.of(
       context,
     ).pushReplacementNamed(signedIn ? AppRoutes.shell : AppRoutes.login);
+  }
+
+  /// Shows the blocking update dialog when a newer release exists. A failed
+  /// check (offline, table missing) never blocks the app.
+  Future<void> _enforceUpdate() async {
+    if (!AuthService.isConfigured) return;
+    AppRelease? release;
+    try {
+      release = await AppUpdateService.fetchNewerRelease();
+    } catch (e) {
+      debugPrint('[Update] Check failed: $e');
+      return;
+    }
+    if (release == null || !mounted) return;
+    // The dialog never returns on its own: the user installs or the app exits.
+    await ForceUpdateDialog.show(context, release);
   }
 
   @override
