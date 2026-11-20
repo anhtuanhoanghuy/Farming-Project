@@ -44,7 +44,7 @@ begin
   from public.device_shares
   where device_id = p_device_id
     and status in ('pending', 'accepted', 'revoke_waiting');
-  if v_active_count >= 1 then
+  if v_active_count >= 5 then
     raise exception 'Share limit reached' using errcode = '54000';
   end if;
 

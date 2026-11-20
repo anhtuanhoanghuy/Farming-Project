@@ -26,7 +26,7 @@ class ShareDeviceDialog extends StatefulWidget {
 
 class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
   static const _codeLength = 8;
-  static const _maxActiveShares = 1;
+  static const _maxActiveShares = 5;
   static const _activeStatuses = {'pending', 'accepted', 'revoke_waiting'};
 
   int _activeShareCount = 0;
