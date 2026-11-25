@@ -2,13 +2,17 @@
 # log the release in document\release_pipeline.md and print the Supabase SQL.
 #
 # Usage (from anywhere):
-#   .\tools\release_apk.ps1                         # patch bump: 1.1.0+1 -> 1.1.1+2
-#   .\tools\release_apk.ps1 -Bump minor -Notes "What changed"
-#   .\tools\release_apk.ps1 -DriveUrl "https://drive.google.com/file/d/ID/view?usp=sharing"
+#   .\tools\release_apk.ps1                         # CI mode (default): only bump version, 1.1.0+1 -> 1.1.1+2
+#   .\tools\release_apk.ps1 -Bump minor            # only bump version (minor)
+#   .\tools\release_apk.ps1 -Full -Notes "What changed"   # local: bump + build + SHA + log + SQL
+#   .\tools\release_apk.ps1 -Full -DriveUrl "https://drive.google.com/file/d/ID/view?usp=sharing"
+# Without -Full the script only bumps the version (GitHub Actions does build/release).
+# In GitHub Actions, version_name / version_code are written to $GITHUB_OUTPUT.
 param(
   [ValidateSet('patch', 'minor', 'major')][string]$Bump = 'patch',
   [string]$Notes = '',
-  [string]$DriveUrl = 'PASTE_DRIVE_SHARE_LINK_HERE'
+  [string]$DriveUrl = 'PASTE_DRIVE_SHARE_LINK_HERE',
+  [switch]$Full
 )
 
 $ErrorActionPreference = 'Stop'
@@ -45,6 +49,15 @@ if (-not $configRe.IsMatch($config)) { throw 'Cannot find appVersion in app_conf
 
 [IO.File]::WriteAllText($pubspecPath, $versionRe.Replace($pubspec, "version: $name+$code", 1), $utf8)
 [IO.File]::WriteAllText($configPath, $configRe.Replace($config, "static const appVersion = '$name';", 1), $utf8)
+
+if ($env:GITHUB_OUTPUT) {
+  Add-Content -Path $env:GITHUB_OUTPUT -Value "version_name=$name", "version_code=$code" -Encoding utf8
+}
+
+if (-not $Full) {
+  Write-Host "Version bumped only (use -Full for build, SHA, log and SQL)." -ForegroundColor Green
+  return
+}
 
 try {
   Push-Location $appDir
