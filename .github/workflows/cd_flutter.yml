@@ -69,3 +69,24 @@ jobs:
           URL=$(rclone link "gdrive:$DIR/$FILE" --drive-root-folder-id "$DRIVE_FOLDER_ID")
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           rm -f ~/.config/rclone/rclone.conf
+
+      - name: Register release in Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          APK_URL: ${{ steps.drive.outputs.url }}
+          NOTES: ${{ github.event.head_commit.message }}
+        run: |
+          BODY=$(jq -n \
+            --argjson code "${{ steps.info.outputs.code }}" \
+            --arg name "${{ steps.info.outputs.name }}" \
+            --arg url "$APK_URL" \
+            --arg sha "${{ steps.info.outputs.sha }}" \
+            --arg notes "$NOTES" \
+            '{version_code:$code, version_name:$name, apk_url:$url, sha256:$sha, release_notes:$notes}')
+          curl --fail-with-body -X POST "$SUPABASE_URL/rest/v1/app_releases" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d "$BODY"
