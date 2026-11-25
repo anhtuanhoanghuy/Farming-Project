@@ -103,6 +103,10 @@ class DeviceHealth extends ChangeNotifier {
   /// arrives.
   Future<void> load(String deviceId) => _enqueue(deviceId, () async {});
 
+  /// Drops all in-memory state so tests do not inherit a pending load.
+  @visibleForTesting
+  void resetForTest() => _states.clear();
+
   /// Empties the log of [deviceId].
   Future<void> clearHistory(String deviceId) => _enqueue(deviceId, () async {
     _state(deviceId).log.clear();

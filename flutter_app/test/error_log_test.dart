@@ -188,7 +188,7 @@ void main() {
         ),
       );
       await tester.pump();
-      expect(find.text('Console realtime'), findsOneWidget);
+      expect(find.text('MQTT console'), findsOneWidget);
       expect(find.text('Chưa có bản tin nào'), findsOneWidget);
       expect(find.text('Nhật ký lỗi lưu trong bộ nhớ thiết bị'), findsNothing);
 

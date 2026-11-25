@@ -107,8 +107,8 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(_wrap(const Scaffold(body: HeroBanner())));
-    const homeBannerTitle = 'Nâng tầm tổ ấm.\nSống thông minh hơn.';
-    const pondBannerTitle = 'Nắm rõ ao nuôi.\nVận hành thảnh thơi.';
+    const homeBannerTitle = 'Nâng tầm tổ ấm\nSống thông minh hơn';
+    const pondBannerTitle = 'Nắm rõ ao nuôi\nVận hành thảnh thơi';
     expect(find.text(homeBannerTitle), findsOneWidget);
     expect(find.byType(AnimatedContainer), findsNothing);
 
@@ -180,7 +180,7 @@ void main() {
 
     expect(find.text('Thiết lập cấu hình thất bại'), findsOneWidget);
     expect(find.text('Wi-Fi failed, previous settings kept'), findsOneWidget);
-    expect(find.text('Quay lại cấu hình Wi-Fi'), findsOneWidget);
+    expect(find.text('Chưa xác nhận lưu cấu hình'), findsOneWidget);
     expect(find.text('Về danh sách thiết bị'), findsOneWidget);
   });
 
@@ -305,7 +305,7 @@ void main() {
       expect(find.text('Thời gian bật'), findsOneWidget);
       expect(find.text('Thời gian tắt kể từ khi bật'), findsOneWidget);
       // The snapshot's delay settings (5 min, 30 min, ON then OFF) fill the form.
-      expect(find.text('Gửi yêu cầu BẬT · 5 phút'), findsOneWidget);
+      expect(find.text('Bắt đầu hẹn giờ BẬT · 5 phút'), findsOneWidget);
       expect(
         find.textContaining('Firmware chỉ cho phép một trong hai'),
         findsNothing,
@@ -316,7 +316,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Thời gian tắt'), findsOneWidget);
       expect(find.text('Thời gian bật kể từ khi tắt'), findsOneWidget);
-      expect(find.text('Gửi yêu cầu TẮT · 5 phút'), findsOneWidget);
+      expect(find.text('Bắt đầu hẹn giờ TẮT · 5 phút'), findsOneWidget);
       expect(find.text('Đổi sang bật'), findsOneWidget);
       expect(find.text('BẬT'), findsOneWidget);
       expect(find.text('TẮT'), findsOneWidget);
@@ -331,9 +331,9 @@ void main() {
     await tester.enterText(find.byType(TextField).first, '');
     await tester.enterText(find.byType(TextField).at(1), '');
     await tester.pump();
-    expect(find.text('nhập số phút'), findsNWidgets(2));
+    expect(find.text('Nhập số phút'), findsNWidgets(2));
     var sendButton = tester.widget<ElevatedButton>(
-      find.widgetWithText(ElevatedButton, 'Gửi yêu cầu BẬT'),
+      find.widgetWithText(ElevatedButton, 'Bắt đầu hẹn giờ BẬT'),
     );
     expect(sendButton.onPressed, isNull);
 
@@ -341,59 +341,59 @@ void main() {
     await tester.enterText(find.byType(TextField).at(1), '30');
     await tester.pump();
     sendButton = tester.widget<ElevatedButton>(
-      find.widgetWithText(ElevatedButton, 'Gửi yêu cầu BẬT · 1 phút'),
+      find.widgetWithText(ElevatedButton, 'Bắt đầu hẹn giờ BẬT · 1 phút'),
     );
     expect(sendButton.onPressed, isNotNull);
 
     await tester.enterText(find.byType(TextField).first, '1440');
     await tester.pump();
     sendButton = tester.widget<ElevatedButton>(
-      find.widgetWithText(ElevatedButton, 'Gửi yêu cầu BẬT · 1440 phút'),
+      find.widgetWithText(ElevatedButton, 'Bắt đầu hẹn giờ BẬT · 1440 phút'),
     );
     expect(sendButton.onPressed, isNotNull);
 
     await tester.enterText(find.byType(TextField).first, '1441');
     await tester.pump();
     sendButton = tester.widget<ElevatedButton>(
-      find.widgetWithText(ElevatedButton, 'Gửi yêu cầu BẬT · 1441 phút'),
+      find.widgetWithText(ElevatedButton, 'Bắt đầu hẹn giờ BẬT · 1441 phút'),
     );
     expect(sendButton.onPressed, isNull);
 
     await tester.enterText(find.byType(TextField).first, '2');
     await tester.pump();
     sendButton = tester.widget<ElevatedButton>(
-      find.widgetWithText(ElevatedButton, 'Gửi yêu cầu BẬT · 2 phút'),
+      find.widgetWithText(ElevatedButton, 'Bắt đầu hẹn giờ BẬT · 2 phút'),
     );
     expect(sendButton.onPressed, isNotNull);
 
     await tester.enterText(find.byType(TextField).at(1), '1440');
     await tester.pump();
     sendButton = tester.widget<ElevatedButton>(
-      find.widgetWithText(ElevatedButton, 'Gửi yêu cầu BẬT · 2 phút'),
+      find.widgetWithText(ElevatedButton, 'Bắt đầu hẹn giờ BẬT · 2 phút'),
     );
     expect(sendButton.onPressed, isNotNull);
 
     await tester.enterText(find.byType(TextField).at(1), '1441');
     await tester.pump();
     sendButton = tester.widget<ElevatedButton>(
-      find.widgetWithText(ElevatedButton, 'Gửi yêu cầu BẬT · 2 phút'),
+      find.widgetWithText(ElevatedButton, 'Bắt đầu hẹn giờ BẬT · 2 phút'),
     );
     expect(sendButton.onPressed, isNull);
 
     await tester.enterText(find.byType(TextField).at(1), '1439');
     await tester.pump();
     sendButton = tester.widget<ElevatedButton>(
-      find.widgetWithText(ElevatedButton, 'Gửi yêu cầu BẬT · 2 phút'),
+      find.widgetWithText(ElevatedButton, 'Bắt đầu hẹn giờ BẬT · 2 phút'),
     );
     expect(sendButton.onPressed, isNotNull);
 
     await tester.enterText(find.byType(TextField).first, '60');
     await tester.pump();
-    expect(find.text('Gửi yêu cầu BẬT · 60 phút'), findsOneWidget);
+    expect(find.text('Bắt đầu hẹn giờ BẬT · 60 phút'), findsOneWidget);
     await tester.enterText(find.byType(TextField).first, '0');
     await tester.pump();
     sendButton = tester.widget<ElevatedButton>(
-      find.widgetWithText(ElevatedButton, 'Gửi yêu cầu BẬT · ngay'),
+      find.widgetWithText(ElevatedButton, 'Bắt đầu hẹn giờ BẬT · ngay'),
     );
     expect(sendButton.onPressed, isNull);
   });
@@ -469,7 +469,7 @@ void main() {
     _receiveSnapshot();
     await tester.pumpWidget(_wrap(_loadScreen()));
     await tester.pumpAndSettle();
-    expect(find.text('Nhiệt độ & Độ ẩm · RS1'), findsNWidgets(2));
+    expect(find.text('Nhiệt độ & Độ ẩm'), findsNWidgets(2));
   });
 
   testWidgets('A running delay shows its countdown and a stop button', (
@@ -479,7 +479,7 @@ void main() {
     await tester.pumpWidget(_wrap(_loadScreen()));
     await tester.pump();
     expect(find.textContaining('Dừng - 04:'), findsOneWidget);
-    expect(find.textContaining('Gửi yêu cầu'), findsNothing);
+    expect(find.textContaining('Bắt đầu hẹn giờ'), findsNothing);
     final modeSwitch = find
         .ancestor(of: find.text('Đổi sang tắt'), matching: find.byType(InkWell))
         .first;
@@ -491,7 +491,7 @@ void main() {
     LoadController.instance.cancelDelay();
     await tester.pump();
     expect(find.textContaining('Dừng - '), findsNothing);
-    expect(find.textContaining('Gửi yêu cầu'), findsOneWidget);
+    expect(find.textContaining('Bắt đầu hẹn giờ'), findsOneWidget);
     expect(tester.widget<InkWell>(modeSwitch).onTap, isNotNull);
     expect(tester.widget<Opacity>(opacity).opacity, 1);
   });
@@ -500,7 +500,7 @@ void main() {
     _receiveSnapshot(loadEnabled: false);
     await tester.pumpWidget(_wrap(_loadScreen()));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Điều khiển tải đang tắt'), findsOneWidget);
+    expect(find.textContaining('Tải này đang bị vô hiệu hóa'), findsOneWidget);
     expect(find.text('Yêu cầu điều khiển mới'), findsNothing);
   });
 
@@ -649,7 +649,10 @@ void main() {
     // The new state was shown first, then restored: nothing acknowledged it.
     expect(seen, contains(!before));
     expect(load.isOn, before);
-    expect(find.textContaining('Giao tiếp với ESP32 thất bại'), findsOneWidget);
+    expect(
+      find.textContaining('Giao tiếp với thiết bị thất bại'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Quick taps show every state but send only the last one', (
@@ -775,12 +778,12 @@ void main() {
         _wrap(DashboardScreen(device: _device, inShell: false)),
       );
       await tester.pumpAndSettle();
-      expect(find.textContaining('Đang chờ snapshot'), findsOneWidget);
+      expect(find.textContaining('Đang chờ đồng bộ'), findsOneWidget);
 
       _receiveSnapshot();
       await tester.pumpAndSettle();
-      expect(find.text('Nhiệt độ & Độ ẩm · RS1'), findsOneWidget);
-      expect(find.text('Phao nước · DI2'), findsOneWidget);
+      expect(find.text('Nhiệt độ & Độ ẩm'), findsOneWidget);
+      expect(find.text('Phao nước'), findsOneWidget);
       // RS3 is configured but disabled.
       expect(find.textContaining('RS3'), findsNothing);
       expect(find.text('_'), findsNWidgets(2));
@@ -795,7 +798,7 @@ void main() {
       expect(find.text('°C'), findsOneWidget);
       expect(find.text('60'), findsOneWidget);
       expect(find.text('%RH'), findsOneWidget);
-      expect(find.text('Có'), findsOneWidget);
+      expect(find.text('1'), findsOneWidget);
       expect(find.text('Trạng thái'), findsOneWidget);
     },
   );
@@ -935,7 +938,7 @@ void main() {
   testWidgets('Sensor management waits for the snapshot', (tester) async {
     await tester.pumpWidget(_wrap(SensorCapacityScreen(device: _device)));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Đang chờ snapshot'), findsOneWidget);
+    expect(find.textContaining('Đang chờ đồng bộ'), findsOneWidget);
   });
 
   testWidgets('Settings header uses its tab icon instead of a back arrow', (

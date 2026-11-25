@@ -366,6 +366,7 @@ void main() {
       DeveloperAccessController.instance.setAccess(true);
       DeviceState.instance.reset(deviceId);
       TrafficLog.instance.clear();
+      DeviceHealth.instance.resetForTest();
     });
 
     testWidgets('Diagnostics header shows tab icon only on the device list', (
@@ -428,7 +429,7 @@ void main() {
       expect(find.textContaining('SYS_ERR_MODBUS_TIMEOUT'), findsNWidgets(2));
       expect(find.textContaining('SYS_ERR_NET_LOST'), findsNWidgets(2));
       expect(find.text('Heap còn trống'), findsOneWidget);
-      expect(find.text('Xem nhật ký kỹ thuật'), findsOneWidget);
+      expect(find.text('Xem chẩn đoán nâng cao'), findsOneWidget);
     });
 
     testWidgets('Diagnostics reports a healthy device', (tester) async {
@@ -500,12 +501,18 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Ao nuôi A1'));
       await tester.pumpAndSettle();
-      expect(find.text('Chọn thiết bị'), findsNothing);
+      expect(
+        find.text('Chọn thiết bị để xem lỗi đang hoạt động.'),
+        findsNothing,
+      );
 
       exists = false;
       await repository.refresh();
       await tester.pumpAndSettle();
-      expect(find.text('Chọn thiết bị'), findsOneWidget);
+      expect(
+        find.text('Chọn thiết bị để xem lỗi đang hoạt động.'),
+        findsOneWidget,
+      );
       expect(find.text('Chưa có thiết bị nào được đăng ký.'), findsOneWidget);
     });
 
@@ -534,12 +541,18 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Ao nuôi A1'));
       await tester.pumpAndSettle();
-      expect(find.text('Chọn thiết bị'), findsNothing);
+      expect(
+        find.text('Chọn thiết bị để xem lỗi đang hoạt động.'),
+        findsNothing,
+      );
       expect(find.text('Kết nối mạng'), findsOneWidget);
 
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(find.text('Chọn thiết bị'), findsOneWidget);
+      expect(
+        find.text('Chọn thiết bị để xem lỗi đang hoạt động.'),
+        findsOneWidget,
+      );
       expect(find.text('device_id: $deviceId'), findsOneWidget);
       expect(find.text('Kết nối mạng'), findsNothing);
     });

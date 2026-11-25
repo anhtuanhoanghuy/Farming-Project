@@ -12,6 +12,8 @@ void main() {
       'name': 'PROV_ESP32_AABBCC',
       'max_sensor_count': 9,
       'max_load_count': 4,
+      'device_type': 'controller',
+      'power_source': 'mains',
     }, const {});
     expect(problems, isEmpty);
   });

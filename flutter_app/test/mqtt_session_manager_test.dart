@@ -119,7 +119,7 @@ void main() {
               .having(
                 (e) => e.message,
                 'message',
-                'ESP32 từ chối: INVALID_VALUE (load is disabled)',
+                'Thiết bị từ chối: INVALID_VALUE (load is disabled)',
               )
               .having((e) => e.ack?.isSuccess, 'ack.isSuccess', false),
         ),
@@ -138,7 +138,7 @@ void main() {
         isA<MqttCommandException>().having(
           (e) => e.message,
           'message',
-          contains('ESP32 không phản hồi lệnh EMERGENCY_STOP'),
+          contains('Thiết bị không phản hồi lệnh'),
         ),
       ),
     );

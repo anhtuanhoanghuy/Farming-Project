@@ -3,13 +3,16 @@ import 'package:flutter_app/protocol/mqtt_topics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('uses the configured broker endpoint without authentication or TLS', () {
-    expect(AppConfig.mqttHost, '103.98.150.157');
-    expect(AppConfig.mqttPort, 1883);
-    expect(AppConfig.mqttTls, isFalse);
-    expect(AppConfig.mqttUsername, isEmpty);
-    expect(AppConfig.mqttPassword, isEmpty);
-  });
+  test(
+    'uses the configured broker endpoint with authentication and without TLS',
+    () {
+      expect(AppConfig.mqttHost, '103.98.150.157');
+      expect(AppConfig.mqttPort, 1883);
+      expect(AppConfig.mqttTls, isFalse);
+      expect(AppConfig.mqttUsername, isNotEmpty);
+      expect(AppConfig.mqttPassword, isNotEmpty);
+    },
+  );
 
   test('builds exactly the four controller topics', () {
     final topics = MqttDeviceTopics.forDevice(

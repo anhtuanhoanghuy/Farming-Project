@@ -64,7 +64,7 @@ void main() {
       expect(ack.dup, isTrue);
       expect(
         ack.errorMessage,
-        'ESP32 từ chối: INVALID_VALUE (load is disabled)',
+        'Thiết bị từ chối: INVALID_VALUE (load is disabled)',
       );
       final error = MqttCommandException.rejected(ack);
       expect('$error', ack.errorMessage);
@@ -220,14 +220,14 @@ void main() {
       expect(snapshot.ipAddress, '192.168.1.20');
     });
 
-    test('falls back to the standard ports when capabilities are missing', () {
+    test('offers no ports when capabilities are missing', () {
       final bare = DeviceSnapshot.tryParse({
         'type': 'SNAPSHOT',
         'loads': <Object?>[],
       }, DateTime(2026))!;
-      expect(bare.portsFor('rs485'), ['RS1', 'RS2', 'RS3', 'RS4']);
-      expect(bare.portsFor('analog_4_20ma'), ['AN1']);
-      expect(bare.portsFor('di'), ['DI1', 'DI2', 'DI3', 'DI4']);
+      expect(bare.portsFor('rs485'), isEmpty);
+      expect(bare.portsFor('analog_4_20ma'), isEmpty);
+      expect(bare.portsFor('di'), isEmpty);
     });
 
     test('rejects messages that are not snapshots', () {
@@ -333,10 +333,10 @@ void main() {
     test('digital input values are booleans', () {
       final value = telemetry.input('DI2')!.values.single;
       expect(value.value, isTrue);
-      expect(value.display, 'Có');
+      expect(value.display, '1');
       expect(
         const TelemetryValue(name: 'n', unit: '', value: false).display,
-        'Không',
+        '0',
       );
     });
 
