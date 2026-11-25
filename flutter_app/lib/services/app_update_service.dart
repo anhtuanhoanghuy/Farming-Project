@@ -112,7 +112,8 @@ class AppUpdateService {
       'https://drive.usercontent.google.com/download?id=$id&export=download&confirm=t',
     );
 
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 15);
     try {
       final request = await client.getUrl(uri);
       final response = await request.close();

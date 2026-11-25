@@ -28,7 +28,9 @@ class GuestRevokeWatcher {
             final status = share['status'] as String?;
             final shareId = share['id'] as String?;
             if (status == 'revoke_waiting' && shareId != null) {
-              debugPrint('[GuestRevokeWatcher] Auto-confirming revoke for share: $shareId');
+              debugPrint(
+                '[GuestRevokeWatcher] Auto-confirming revoke for share: $shareId',
+              );
               _autoConfirmRevoke(shareId);
             }
           }

@@ -353,23 +353,22 @@ class CrudApi {
         .select('device_id')
         .eq('guest_id', userId)
         .eq('status', 'accepted');
-    
+
     if (shares.isEmpty) return [];
-    
+
     // Get the actual devices
     final deviceIds = [
       for (final share in shares)
-        if (share['device_id'] is String)
-          share['device_id'] as String
+        if (share['device_id'] is String) share['device_id'] as String,
     ];
-    
+
     if (deviceIds.isEmpty) return [];
-    
+
     final devices = await _db
         .from('devices')
         .select()
         .inFilter('id', deviceIds);
-    
+
     return devices.cast<Map<String, dynamic>>();
   }
 
@@ -444,14 +443,21 @@ class CrudApi {
   static Stream<String> get revokeTimedOut => _revokeTimedOut.stream;
 
   static Future<void> revokeShare(String shareId) async {
-    await _rpc('revoke_share', {'p_share_id': shareId}, when: 'thu hồi chia sẻ');
+    await _rpc('revoke_share', {
+      'p_share_id': shareId,
+    }, when: 'thu hồi chia sẻ');
     Timer(revokeConfirmTimeout, () => unawaited(_forceDeleteRevoke(shareId)));
   }
 
   static Future<void> _forceDeleteRevoke(String shareId) async {
     try {
-      await _db.rpc('force_delete_revoke_share', params: {'p_share_id': shareId});
-      debugPrint('[CRUD] Đã xóa chia sẻ $shareId sau ${revokeConfirmTimeout.inSeconds}s');
+      await _db.rpc(
+        'force_delete_revoke_share',
+        params: {'p_share_id': shareId},
+      );
+      debugPrint(
+        '[CRUD] Đã xóa chia sẻ $shareId sau ${revokeConfirmTimeout.inSeconds}s',
+      );
       _revokeTimedOut.add(shareId);
     } catch (e) {
       debugPrint('[CRUD] Không xóa được chia sẻ $shareId sau timeout: $e');
@@ -460,17 +466,25 @@ class CrudApi {
 
   /// Guest confirms they received revoke request.
   /// Updates status from 'revoke_waiting' to 'revoked'.
-  static Future<void> confirmRevoke(String shareId) =>
-      _rpc('confirm_revoke', {'p_share_id': shareId}, when: 'xác nhận bị thu hồi');
+  static Future<void> confirmRevoke(String shareId) => _rpc('confirm_revoke', {
+    'p_share_id': shareId,
+  }, when: 'xác nhận bị thu hồi');
 
   /// Host deletes a revoked share after guest confirmed.
   /// Can only delete if status is 'revoked'.
-  static Future<void> deleteRevokedShare(String shareId) =>
-      _rpc('delete_revoked_share', {'p_share_id': shareId}, when: 'xóa chia sẻ đã thu hồi');
+  static Future<void> deleteRevokedShare(String shareId) => _rpc(
+    'delete_revoked_share',
+    {'p_share_id': shareId},
+    when: 'xóa chia sẻ đã thu hồi',
+  );
 
   /// Invitations sent to the signed-in account, any status.
   static Future<List<Map<String, dynamic>>> listMyInvitations() async {
-    final result = await _rpc('list_my_invitations', const {}, when: 'tải lời mời chia sẻ');
+    final result = await _rpc(
+      'list_my_invitations',
+      const {},
+      when: 'tải lời mời chia sẻ',
+    );
     return [
       for (final row in (result is List ? result : const []))
         Map<String, dynamic>.from(row as Map),
@@ -485,8 +499,11 @@ class CrudApi {
   );
 
   /// Guest removes themself from a device shared with them (self-remove).
-  static Future<void> guestRemoveShare(String shareId) =>
-      _rpc('guest_remove_share', {'p_share_id': shareId}, when: 'rời khỏi chia sẻ');
+  static Future<void> guestRemoveShare(String shareId) => _rpc(
+    'guest_remove_share',
+    {'p_share_id': shareId},
+    when: 'rời khỏi chia sẻ',
+  );
 
   /// Guest removes themself from a device shared with them.
   static Future<void> leaveSharedDevice(String deviceId) => _rpc(
@@ -597,10 +614,8 @@ class CrudApi {
 
   /// Emits whenever a `devices` row changes for the signed-in account.
   /// Detects ownership changes (transfer) for guest users.
-  static Stream<List<Map<String, dynamic>>> deviceChanges(String userId) => _db
-      .from('devices')
-      .stream(primaryKey: ['id'])
-      .eq('user_id', userId);
+  static Stream<List<Map<String, dynamic>>> deviceChanges(String userId) =>
+      _db.from('devices').stream(primaryKey: ['id']).eq('user_id', userId);
 
   /// Emits whenever a `device_shares` row visible to the signed-in account
   /// changes. [column] is `owner_id` or `guest_id`; needs the table in the
@@ -608,10 +623,7 @@ class CrudApi {
   static Stream<List<Map<String, dynamic>>> shareChanges(
     String column,
     String value,
-  ) => _db
-      .from('device_shares')
-      .stream(primaryKey: ['id'])
-      .eq(column, value);
+  ) => _db.from('device_shares').stream(primaryKey: ['id']).eq(column, value);
 
   /// Transfer notices addressed to the signed-in account (previous owner).
   static Stream<List<Map<String, dynamic>>> transferNotices(String ownerId) =>

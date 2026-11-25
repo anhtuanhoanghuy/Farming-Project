@@ -93,14 +93,12 @@ void main() {
     expect(find.text('Quên mật khẩu?'), findsNothing);
     expect(find.text('Mã số đề tài: 11/2026/HĐ-ĐTCS'), findsOneWidget);
     expect(
-      find.byWidgetPredicate(
-        (widget) {
-          if (widget is! Image) return false;
-          final image = widget.image;
-          return image is AssetImage &&
-              image.assetName == 'assets/images/nacentech_logo.png';
-        },
-      ),
+      find.byWidgetPredicate((widget) {
+        if (widget is! Image) return false;
+        final image = widget.image;
+        return image is AssetImage &&
+            image.assetName == 'assets/images/nacentech_logo.png';
+      }),
       findsOneWidget,
     );
   });

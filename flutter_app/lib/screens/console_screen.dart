@@ -61,7 +61,9 @@ class _ConsoleScreenState extends State<ConsoleScreen> {
     DevicePresence.instance.start();
     // Check access on entry
     if (_deviceId.isNotEmpty) {
-      debugPrint('[ConsoleScreen] Checking access on entry for device: $_deviceId');
+      debugPrint(
+        '[ConsoleScreen] Checking access on entry for device: $_deviceId',
+      );
       unawaited(DeviceAccessWatcher.instance.checkAccessNow());
     }
   }

@@ -41,19 +41,22 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     super.initState();
     DevicePresence.instance.start();
     DeviceHealth.instance.start();
-    
+
     // Load devices first, then start share streams
-    _repository.refresh().then((_) {
-      if (mounted) {
-        unawaited(_loadInvitations());
-        _startShareStreams(); // Start streams after devices load
-      }
-    }).catchError((e) {
-      debugPrint('[DeviceList] Initial refresh failed: $e');
-      if (mounted) {
-        _startShareStreams(); // Start streams even if device load fails
-      }
-    });
+    _repository
+        .refresh()
+        .then((_) {
+          if (mounted) {
+            unawaited(_loadInvitations());
+            _startShareStreams(); // Start streams after devices load
+          }
+        })
+        .catchError((e) {
+          debugPrint('[DeviceList] Initial refresh failed: $e');
+          if (mounted) {
+            _startShareStreams(); // Start streams even if device load fails
+          }
+        });
   }
 
   void _startShareStreams() {
@@ -72,7 +75,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     } catch (e) {
       debugPrint('[DeviceList] Guest stream error: $e');
     }
-    
+
     // Stream 2: Shares where user is OWNER (they shared to others)
     // This catches revoke status changes
     try {

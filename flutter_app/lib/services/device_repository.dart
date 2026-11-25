@@ -256,7 +256,9 @@ class DeviceRepository extends ChangeNotifier {
         // to prevent false popups for newly added devices
         for (final device in _devices) {
           if (device.macAddress.isNotEmpty) {
-            DeviceAccessRevokeNotifier.instance.markDeviceAsAccessible(device.macAddress);
+            DeviceAccessRevokeNotifier.instance.markDeviceAsAccessible(
+              device.macAddress,
+            );
           }
         }
         notifyListeners();

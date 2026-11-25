@@ -14,7 +14,8 @@ class DeviceAccessRevokeNotifier {
   static DeviceAccessRevokeNotifier get instance => _instance;
 
   final Set<String> _notifiedDevices = {}; // Track devices already notified
-  final Set<String> _seenDevices = {}; // Track devices that were once accessible
+  final Set<String> _seenDevices =
+      {}; // Track devices that were once accessible
   bool _started = false;
 
   /// Start listening for device access revocation/transfer.
@@ -40,7 +41,9 @@ class DeviceAccessRevokeNotifier {
 
     // Only show popup if device was previously seen/accessible
     if (!_seenDevices.contains(deviceId)) {
-      debugPrint('[DeviceAccessRevokeNotifier] Device $deviceId was never accessible, skipping popup');
+      debugPrint(
+        '[DeviceAccessRevokeNotifier] Device $deviceId was never accessible, skipping popup',
+      );
       _seenDevices.add(deviceId); // Mark as seen to avoid showing in future
       return;
     }
@@ -73,7 +76,9 @@ class DeviceAccessRevokeNotifier {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: const Text('Quyền truy cập bị thu hồi'),
-        content: const Text('Thiết bị hiện đã bị thu hồi quyền hoặc chuyển quyền sở hữu.'),
+        content: const Text(
+          'Thiết bị hiện đã bị thu hồi quyền hoặc chuyển quyền sở hữu.',
+        ),
         actions: [
           TextButton(
             onPressed: () {

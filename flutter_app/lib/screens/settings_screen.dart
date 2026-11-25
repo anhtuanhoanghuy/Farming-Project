@@ -40,10 +40,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadShareCode() async {
     try {
-      final code = await CrudApi.run(
-        'Tải mã chia sẻ',
-        CrudApi.myShareCode,
-      );
+      final code = await CrudApi.run('Tải mã chia sẻ', CrudApi.myShareCode);
       if (mounted) setState(() => _shareCode = code);
     } catch (error) {
       if (!mounted) return;

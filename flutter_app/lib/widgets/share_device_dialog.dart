@@ -79,12 +79,13 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
             }
             // On any change, reload shares
             setState(_loadShares);
-            
+
             // Also auto-delete any shares in 'revoked' or 'declined' status (silent, no reload)
             for (final share in shares) {
               final status = share['status'] as String?;
               final shareId = share['id'] as String?;
-              if ((status == 'revoked' || status == 'declined') && shareId != null) {
+              if ((status == 'revoked' || status == 'declined') &&
+                  shareId != null) {
                 _silentDeleteShare(shareId);
               }
             }
@@ -108,19 +109,20 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
   }
 
   void _loadShares() {
-    _sharesFuture = CrudApi.run(
-      'Mở hộp thoại chia sẻ thiết bị "${widget.deviceName}"',
-      () => CrudApi.listDeviceShares(widget.deviceId),
-    ).then((shares) {
-      _lastShares = shares;
-      final count = shares
-          .where((s) => _activeStatuses.contains(s['status']))
-          .length;
-      if (mounted && count != _activeShareCount) {
-        setState(() => _activeShareCount = count);
-      }
-      return shares;
-    });
+    _sharesFuture =
+        CrudApi.run(
+          'Mở hộp thoại chia sẻ thiết bị "${widget.deviceName}"',
+          () => CrudApi.listDeviceShares(widget.deviceId),
+        ).then((shares) {
+          _lastShares = shares;
+          final count = shares
+              .where((s) => _activeStatuses.contains(s['status']))
+              .length;
+          if (mounted && count != _activeShareCount) {
+            setState(() => _activeShareCount = count);
+          }
+          return shares;
+        });
   }
 
   Future<void> _checkCode() async {
@@ -347,8 +349,7 @@ class _ShareDeviceDialogState extends State<ShareDeviceDialog> {
                             children: [
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       (share['guest_email'] ??

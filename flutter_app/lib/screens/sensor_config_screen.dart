@@ -60,7 +60,9 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
   void initState() {
     super.initState();
     // Check access on entry
-    debugPrint('[SensorConfigScreen] Checking access on entry for device: ${widget.selection.device.deviceId}');
+    debugPrint(
+      '[SensorConfigScreen] Checking access on entry for device: ${widget.selection.device.deviceId}',
+    );
     unawaited(DeviceAccessWatcher.instance.checkAccessNow());
   }
 

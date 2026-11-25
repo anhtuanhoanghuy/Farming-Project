@@ -212,7 +212,9 @@ class _LoadControlScreenState extends State<LoadControlScreen> {
     _syncFromSnapshot(force: true);
     _load.addListener(_onLoadChanged);
     // Check access on entry
-    debugPrint('[LoadControlScreen] Checking access on entry for device: $_mac');
+    debugPrint(
+      '[LoadControlScreen] Checking access on entry for device: $_mac',
+    );
     unawaited(DeviceAccessWatcher.instance.checkAccessNow());
   }
 

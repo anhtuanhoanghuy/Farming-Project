@@ -57,7 +57,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         Navigator.of(context).maybePop();
       }
     });
-    
+
     unawaited(LoadSync.instance.attach(widget.device.deviceId));
   }
 
@@ -249,8 +249,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (record == null) return;
     showDialog<void>(
       context: context,
-      builder: (_) =>
-          ShareDeviceDialog(deviceId: record.id, deviceName: _name),
+      builder: (_) => ShareDeviceDialog(deviceId: record.id, deviceName: _name),
     );
   }
 

@@ -84,11 +84,14 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
     DevicePresence.instance.start();
     DeviceHealth.instance.start();
     // Initial load
-    _repository.refresh().then((_) {
-      debugPrint('[Diagnostics] Initial device load complete');
-    }).catchError((e) {
-      debugPrint('[Diagnostics] Initial device load failed: $e');
-    });
+    _repository
+        .refresh()
+        .then((_) {
+          debugPrint('[Diagnostics] Initial device load complete');
+        })
+        .catchError((e) {
+          debugPrint('[Diagnostics] Initial device load failed: $e');
+        });
   }
 
   Future<void> _openDevice(DeviceRecord device) async {
@@ -137,7 +140,9 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
           leadingIcon: Icons.show_chart,
           embedInTab: widget.inShell,
           navIndex: widget.inShell ? null : 1,
-          onNavTap: widget.inShell ? null : (i) => AppRoutes.openTab(context, i),
+          onNavTap: widget.inShell
+              ? null
+              : (i) => AppRoutes.openTab(context, i),
           body: _DeviceList(repository: _repository, onSelect: _openDevice),
         );
       },
@@ -167,7 +172,9 @@ class _DeviceDiagnosticsScreenState extends State<_DeviceDiagnosticsScreen> {
     super.initState();
     widget.repository.addListener(_onDevicesChanged);
     // Check access on entry
-    debugPrint('[DiagnosticsScreen] Checking access on entry for device: ${widget.device.macAddress}');
+    debugPrint(
+      '[DiagnosticsScreen] Checking access on entry for device: ${widget.device.macAddress}',
+    );
     unawaited(DeviceAccessWatcher.instance.checkAccessNow());
   }
 

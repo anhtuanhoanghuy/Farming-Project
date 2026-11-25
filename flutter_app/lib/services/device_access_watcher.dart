@@ -9,9 +9,8 @@ import 'device_repository.dart';
 /// Global broadcast stream for device access changes (revoke, ownership transfer).
 /// All screens listening to a device should subscribe to revoked events.
 class DeviceAccessWatcher extends ChangeNotifier {
-  DeviceAccessWatcher({
-    DeviceRepository? repository,
-  }) : _repository = repository ?? DeviceRepository.instance;
+  DeviceAccessWatcher({DeviceRepository? repository})
+    : _repository = repository ?? DeviceRepository.instance;
 
   static final instance = DeviceAccessWatcher();
 
@@ -37,11 +36,13 @@ class DeviceAccessWatcher extends ChangeNotifier {
 
   void _startShareListener() {
     try {
-      debugPrint('[DeviceAccessWatcher] 🔔 Starting share listener for user: ${CrudApi.userId}');
+      debugPrint(
+        '[DeviceAccessWatcher] 🔔 Starting share listener for user: ${CrudApi.userId}',
+      );
       _shareSubscription = CrudApi.shareChanges('guest_id', CrudApi.userId).listen(
         (event) {
           debugPrint('[DeviceAccessWatcher] 🔔 Share change event received');
-          
+
           // Emit only on a transition to 'revoked'; the stream replays old
           // revoked rows on every change, which must not re-trigger the popup.
           final seeded = _shareStatuses != null;
@@ -52,7 +53,9 @@ class DeviceAccessWatcher extends ChangeNotifier {
             if (shareId == null) continue;
             final status = share['status'] as String?;
             next[shareId] = status;
-            if (seeded && status == 'revoked' && previous[shareId] != 'revoked') {
+            if (seeded &&
+                status == 'revoked' &&
+                previous[shareId] != 'revoked') {
               final deviceId = share['device_id'] as String?;
               debugPrint('[DeviceAccessWatcher] ⚠️  DEVICE REVOKED: $deviceId');
               for (final device in _repository.devices) {
@@ -61,7 +64,7 @@ class DeviceAccessWatcher extends ChangeNotifier {
             }
           }
           _shareStatuses = next;
-          
+
           // Trigger access check on any share list change
           debugPrint('[DeviceAccessWatcher] ✅ Checking access');
           unawaited(_checkAccess());
@@ -78,41 +81,55 @@ class DeviceAccessWatcher extends ChangeNotifier {
 
   void _startDeviceListener() {
     try {
-      debugPrint('[DeviceAccessWatcher] 🔔 Starting device listener for user: ${CrudApi.userId}');
+      debugPrint(
+        '[DeviceAccessWatcher] 🔔 Starting device listener for user: ${CrudApi.userId}',
+      );
       _deviceSubscription = CrudApi.deviceChanges(CrudApi.userId).listen(
         (event) {
-          debugPrint('[DeviceAccessWatcher] 🔔 Device change event received: ${event.length} devices');
+          debugPrint(
+            '[DeviceAccessWatcher] 🔔 Device change event received: ${event.length} devices',
+          );
           debugPrint('[DeviceAccessWatcher] 📋 Device event details: $event');
-          
+
           // If this is the first event (seed), store it and skip processing
           if (_lastDevices == null) {
-            debugPrint('[DeviceAccessWatcher] 📦 Storing initial seed devices: ${event.length}');
+            debugPrint(
+              '[DeviceAccessWatcher] 📦 Storing initial seed devices: ${event.length}',
+            );
             _lastDevices = event;
             return;
           }
-          
+
           // Check if anything actually changed (count OR any device modified)
           bool changed = (_lastDevices?.length ?? 0) != event.length;
-          
+
           // Also check if any device was modified (name, status, etc.)
-          if (!changed && _lastDevices != null && _lastDevices!.length == event.length) {
+          if (!changed &&
+              _lastDevices != null &&
+              _lastDevices!.length == event.length) {
             for (int i = 0; i < event.length; i++) {
               // Compare full device objects to detect any changes
               if (_lastDevices![i] != event[i]) {
-                debugPrint('[DeviceAccessWatcher] ⚠️  Device ${event[i]['id']} was modified');
+                debugPrint(
+                  '[DeviceAccessWatcher] ⚠️  Device ${event[i]['id']} was modified',
+                );
                 changed = true;
                 break;
               }
             }
           }
-          
+
           _lastDevices = event;
-          
+
           if (changed) {
-            debugPrint('[DeviceAccessWatcher] ✅ Device change detected - checking access');
+            debugPrint(
+              '[DeviceAccessWatcher] ✅ Device change detected - checking access',
+            );
             unawaited(_checkAccess());
           } else {
-            debugPrint('[DeviceAccessWatcher] 🔄 Device event identical, skipping access check');
+            debugPrint(
+              '[DeviceAccessWatcher] 🔄 Device event identical, skipping access check',
+            );
           }
         },
         onError: (e) {
@@ -130,47 +147,59 @@ class DeviceAccessWatcher extends ChangeNotifier {
     try {
       debugPrint('[DeviceAccessWatcher] ✅ Checking access');
       debugPrint('[DeviceAccessWatcher] Checking device access...');
-      
+
       // Get the current devices list from cache
       final currentDevices = _repository.devices;
-      debugPrint('[DeviceAccessWatcher] Current cached devices: ${currentDevices.length}');
+      debugPrint(
+        '[DeviceAccessWatcher] Current cached devices: ${currentDevices.length}',
+      );
       for (final d in currentDevices) {
         debugPrint('  - ${d.name} (${d.macAddress})');
       }
-      
+
       // Fetch fresh data from server
       final userId = CrudApi.userId;
       List<Map<String, dynamic>> ownedDevices = [];
       List<Map<String, dynamic>> sharedDevices = [];
       bool hadError = false;
-      
+
       try {
         ownedDevices = await CrudApi.listDevices(userId) ?? [];
-        debugPrint('[DeviceAccessWatcher] Owned devices from server: ${ownedDevices.length}');
+        debugPrint(
+          '[DeviceAccessWatcher] Owned devices from server: ${ownedDevices.length}',
+        );
         for (final d in ownedDevices) {
           debugPrint('  - ${d['name']} (id: ${d['id']})');
         }
       } catch (e) {
-        debugPrint('[DeviceAccessWatcher] ⚠️  Error fetching owned devices: $e');
+        debugPrint(
+          '[DeviceAccessWatcher] ⚠️  Error fetching owned devices: $e',
+        );
         hadError = true;
       }
-      
+
       try {
         sharedDevices = await CrudApi.listSharedDevices() ?? [];
-        debugPrint('[DeviceAccessWatcher] Shared devices from server: ${sharedDevices.length}');
+        debugPrint(
+          '[DeviceAccessWatcher] Shared devices from server: ${sharedDevices.length}',
+        );
         for (final d in sharedDevices) {
           final deviceId = d['id'];
           final deviceName = d['name'];
           debugPrint('  - $deviceName (id: $deviceId)');
         }
       } catch (e) {
-        debugPrint('[DeviceAccessWatcher] ⚠️  Error fetching shared devices: $e');
+        debugPrint(
+          '[DeviceAccessWatcher] ⚠️  Error fetching shared devices: $e',
+        );
         hadError = true;
       }
 
       // If we had errors fetching, don't emit revoked (could be network issue)
       if (hadError) {
-        debugPrint('[DeviceAccessWatcher] Had errors fetching devices, skipping revoke check');
+        debugPrint(
+          '[DeviceAccessWatcher] Had errors fetching devices, skipping revoke check',
+        );
         return;
       }
 
@@ -189,30 +218,41 @@ class DeviceAccessWatcher extends ChangeNotifier {
           debugPrint('[DeviceAccessWatcher] Adding shared device: $id');
           accessible.add(id);
         } else {
-          debugPrint('[DeviceAccessWatcher] ⚠️  Shared device has no valid id: $id');
+          debugPrint(
+            '[DeviceAccessWatcher] ⚠️  Shared device has no valid id: $id',
+          );
         }
       }
-      debugPrint('[DeviceAccessWatcher] Total accessible devices: ${accessible.length}');
+      debugPrint(
+        '[DeviceAccessWatcher] Total accessible devices: ${accessible.length}',
+      );
 
       // Check which devices were lost
       for (final device in currentDevices) {
         final deviceId = device.id;
         final macAddress = device.macAddress;
         final deviceName = device.name;
-        
-        if (deviceId == null || deviceId.isEmpty || macAddress == null || macAddress.isEmpty) {
-          debugPrint('[DeviceAccessWatcher] ⚠️  Skipping device with invalid id/mac: $deviceName');
+
+        if (deviceId == null ||
+            deviceId.isEmpty ||
+            macAddress == null ||
+            macAddress.isEmpty) {
+          debugPrint(
+            '[DeviceAccessWatcher] ⚠️  Skipping device with invalid id/mac: $deviceName',
+          );
           continue;
         }
-        
+
         if (!accessible.contains(deviceId)) {
           debugPrint('[DeviceAccessWatcher] !  DEVICE REVOKED: $deviceId');
           _revoked.add(macAddress);
         } else {
-          debugPrint('[DeviceAccessWatcher] ✅ Device still accessible: $deviceName');
+          debugPrint(
+            '[DeviceAccessWatcher] ✅ Device still accessible: $deviceName',
+          );
         }
       }
-      
+
       // Refresh repository to reflect the changes
       await _repository.refresh();
       debugPrint('[DeviceAccessWatcher] Repository refreshed');

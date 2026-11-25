@@ -39,7 +39,9 @@ class _SensorCapacityScreenState extends State<SensorCapacityScreen> {
   void initState() {
     super.initState();
     // Check access on entry
-    debugPrint('[SensorCapacityScreen] Checking access on entry for device: ${widget.device.deviceId}');
+    debugPrint(
+      '[SensorCapacityScreen] Checking access on entry for device: ${widget.device.deviceId}',
+    );
     unawaited(DeviceAccessWatcher.instance.checkAccessNow());
   }
 

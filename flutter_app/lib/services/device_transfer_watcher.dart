@@ -56,10 +56,13 @@ class DeviceTransferWatcher {
     _userId = userId;
     _subscription = _notices(userId).listen(
       (rows) {
-        debugPrint('[Transfer] 🔔 Transfer notice received: ${rows.length} rows');
+        debugPrint(
+          '[Transfer] 🔔 Transfer notice received: ${rows.length} rows',
+        );
         _queue = _queue.then((_) => _process(rows));
       },
-      onError: (Object error) => debugPrint('[Transfer] ❌ Stream error: $error'),
+      onError: (Object error) =>
+          debugPrint('[Transfer] ❌ Stream error: $error'),
     );
   }
 
@@ -99,7 +102,9 @@ class DeviceTransferWatcher {
     // The database decides: a notice can be old if the device came back.
     await _repository.refresh();
     if (_repository.error != null) {
-      debugPrint('[Transfer] Repository error after refresh: ${_repository.error}');
+      debugPrint(
+        '[Transfer] Repository error after refresh: ${_repository.error}',
+      );
       _handled.remove(id);
       return;
     }
