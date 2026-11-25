@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'crud_api.dart';
 import 'device_repository.dart';
@@ -164,7 +163,7 @@ class DeviceAccessWatcher extends ChangeNotifier {
       bool hadError = false;
 
       try {
-        ownedDevices = await CrudApi.listDevices(userId) ?? [];
+        ownedDevices = await CrudApi.listDevices(userId);
         debugPrint(
           '[DeviceAccessWatcher] Owned devices from server: ${ownedDevices.length}',
         );
@@ -179,7 +178,7 @@ class DeviceAccessWatcher extends ChangeNotifier {
       }
 
       try {
-        sharedDevices = await CrudApi.listSharedDevices() ?? [];
+        sharedDevices = await CrudApi.listSharedDevices();
         debugPrint(
           '[DeviceAccessWatcher] Shared devices from server: ${sharedDevices.length}',
         );
@@ -233,10 +232,7 @@ class DeviceAccessWatcher extends ChangeNotifier {
         final macAddress = device.macAddress;
         final deviceName = device.name;
 
-        if (deviceId == null ||
-            deviceId.isEmpty ||
-            macAddress == null ||
-            macAddress.isEmpty) {
+        if (deviceId.isEmpty || macAddress.isEmpty) {
           debugPrint(
             '[DeviceAccessWatcher] ⚠️  Skipping device with invalid id/mac: $deviceName',
           );

@@ -1029,7 +1029,7 @@ class _LoadControlScreenState extends State<LoadControlScreen> {
                         for (final sensor in sensors)
                           AppDropdownOption(
                             value: sensor.portId,
-                            label: '${sensor.name}',
+                            label: sensor.name,
                           ),
                         if (draft.sensorId.isNotEmpty && !knownSensor)
                           AppDropdownOption(
@@ -1326,7 +1326,7 @@ class _LoadControlScreenState extends State<LoadControlScreen> {
       final supported =
           DeviceState.instance.snapshot?.supportsLoad(_load.portId) ?? false;
       return ScreenScaffold(
-        title: '${_load.name}',
+        title: _load.name,
         showBack: true,
         embedInTab: widget.inShell,
         navIndex: widget.inShell ? null : 0,

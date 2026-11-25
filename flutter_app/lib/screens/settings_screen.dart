@@ -187,6 +187,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _KvRow(left: 'Đăng nhập Google', right: _accountEmail),
                     const SizedBox(height: 10),
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         const Expanded(
                           child: Text(
@@ -208,13 +209,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               Icons.copy_rounded,
                               size: 18,
                               color: _shareCode == null
-                                  ? AppColors.textSecondary.withOpacity(0.5)
+                                  ? AppColors.textSecondary.withValues(
+                                      alpha: 0.5,
+                                    )
                                   : AppColors.textSecondary,
                             ),
                           ),
                         ),
                       ],
-                      crossAxisAlignment: CrossAxisAlignment.center,
                     ),
                   ],
                 ),
